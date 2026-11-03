@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: data sources</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --ask: #8a6a00; --ask-bg: #f8f0d0;
+    --yes: #2d7a46; --yes-bg: #e3f3e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --ask: #e3c766; --ask-bg: #352e14;
+      --yes: #7fcf98; --yes-bg: #1a3324;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h2.part { font-size: 1.6rem; margin-top: 64px; border-top: 3px solid var(--accent); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td code { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0 6px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+  .stat b { display: block; font-size: 1.6rem; line-height: 1.2; }
+  .stat span { font-size: 0.88rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Data sources</h1>
+<p class="lede">This page lists every outside system horizon takes data from, what each gives, and how the data enters the warehouse.</p>
+<p class="stamp">Written 2026-11-02 against <code>main</code> at <code>4421b2d8</code>. Where this
+page and the code disagree, the code wins.</p>
+
+<div class="stats" aria-label="The pipeline in numbers">
+  <div class="stat"><b>27</b><span>sources, one raw asset each</span></div>
+  <div class="stat"><b>207</b><span>Dagster assets</span></div>
+  <div class="stat"><b>645</b><span>asset checks</span></div>
+  <div class="stat"><b>16</b><span>schedules</span></div>
+  <div class="stat"><b>110</b><span>dbt models: 28 staging, 11 intermediate, 71 marts</span></div>
+  <div class="stat"><b>62</b><span>models with an enforced contract</span></div>
+  <div class="stat"><b>523</b><span>dbt tests</span></div>
+</div>
+<p class="stamp">Counted at <code>main</code> <code>98b7a9b6</code> (2026-11-02) by loading
+<code>pipeline.defs</code> after <code>make dbt-parse</code>, and from dbt's manifest. The marts split
+45 in <code>funding</code>, 21 in <code>requirements</code> and 5 in <code>people</code>.</p>
+
+<h2 id="how">How data enters</h2>
+<p>Each outside system has a Source in <code>fetch/&lt;domain&gt;/</code>. A Source asks
+the system for data and returns it without parsing it. Every Low-tier fetch lands in the <code>raw</code> schema.
+horizon keeps each version of a record and never prunes it
+(decision 0002, as amended on 2026-10-05). Readers in <code>read/</code> turn pages and files into
+text, and dbt builds the marts that the app and the tools read.</p>
+<div class="note">
+<p>Every schedule in the code ships stopped. The operator starts it on the production instance. The
+cadence column therefore says what the code declares, and not what runs today. Times are America/New_York.</p>
+</div>
+
+<p>The module paths in the tables below are under <code>backend/src/pipeline/</code>.</p>
+
+<h2 id="funders">Funders</h2>
+<p>This section covers what funders publish about their calls, and the guides and pages that come with them.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Source</th><th>What it gives horizon</th><th>Module</th><th>Tier</th><th>Declared cadence</th></tr></thead>
+<tbody>
+<tr><td>Grants.gov daily extract</td><td>Every posted and forecasted federal opportunity, from the full-database XML zip. It is the complete federal record and the baseline for checking the Simpler API.</td><td><code>fetch/opportunities/grants_gov_extract.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>Simpler.Grants.gov search API</td><td>Forecasted and recently posted opportunities. This is the freshness path. It needs an API key.</td><td><code>fetch/opportunities/simpler_grants.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>Simpler.Grants.gov opportunity details</td><td>The attachments of each call, one request per opportunity.</td><td><code>fetch/opportunities/simpler_grants.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>NIH Guide for Grants and Contracts, weekly index</td><td>One record per notice the Guide lists each week. Few of these notices reach Grants.gov.</td><td><code>fetch/opportunities/nih_guide.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>NIH policy notices</td><td>The page of each notice the Guide index lists, so horizon holds the text of a notice and not only its listing.</td><td><code>fetch/opportunities/nih_notices.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 08:15, on its own schedule</td></tr>
+<tr><td>NSF solicitations</td><td>Program solicitations found through NSF's sitemap, including ones Grants.gov never carries.</td><td><code>fetch/opportunities/nsf_solicitations.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>Funder guides (NSF PAPPG, NIH Grants Policy Statement and application instructions, NIFA application guide)</td><td>The standing guides every call inherits, horizon fetches each whole and keeps every revision. A second Source, <code>funder_guides_manual</code>, lands guide files a person obtained when the box could not reach the funder's host. This applied to NIFA's guide in October 2026. Each file must match the sha256 in its manifest. It runs by hand, on no schedule.</td><td><code>fetch/opportunities/funder_guides.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Sunday 05:00, on its own schedule</td></tr>
+<tr><td>Foundation websites</td><td>The pages where 36 seeded private funders (35 foundations and Northeast SARE) say how to apply, crawled from each funder's own site. Foundations do not post to Grants.gov.</td><td><code>fetch/opportunities/foundation_seeds.py</code> and <code>fetch/opportunities/foundation_sites.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Sunday 04:00. The owner's ruling of 2026-10-13 keeps the schedule stopped.</td></tr>
+<tr><td>Solicitation pages on funders' own servers</td><td>The document each open opportunity links as its additional information. A guarded GET with a host blocklist fetches it. Page limits, cost share and real deadlines often appear only here.</td><td><code>fetch/opportunities/opportunity_documents.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="records">Research records</h2>
+<p>This section covers open scholarly and award data about UVM, its peers and the funders. The OpenAlex rows cover
+funders and the researchers domain. Every Source here declares tier Low.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Source</th><th>What it gives horizon</th><th>Module</th><th>Tier</th><th>Declared cadence</th></tr></thead>
+<tbody>
+<tr><td>OpenAlex works</td><td>Every work in the last three years with an author at UVM or the UVM Health Network. The researchers domain builds on this.</td><td><code>fetch/researchers/openalex_uvm_works.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>OpenAlex authors</td><td>The profile of each author the UVM works name at UVM: lifetime counts and topics.</td><td><code>fetch/researchers/openalex_uvm_authors.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>OpenAlex peer benchmarks</td><td>UVM beside its peer universities: output, citations, field mix and funder mix, from the institution entities and aggregate counts.</td><td><code>fetch/peers/openalex_benchmarks.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>OpenAlex funders</td><td>Every funder OpenAlex knows about, with counts by year and ids that join to UVM's sponsors.</td><td><code>fetch/opportunities/openalex_funders.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>OpenAlex topics</td><td>The topic tree (topic, subfield, field, domain) which narrows a funder search.</td><td><code>fetch/opportunities/openalex_topics.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>OpenAlex funder by domain cube</td><td>Which funders fund which topics, year by year, to show which funder has just started caring about a topic.</td><td><code>fetch/opportunities/openalex_funder_domains.py</code></td><td><span class="tag low">Low</span></td><td>Monthly, 03:00 on days 1 to 11, one year a run</td></tr>
+<tr><td>OpenAlex topic screen</td><td>A two-window funder comparison over every topic, the cheap first pass before the cube.</td><td><code>fetch/opportunities/openalex_topic_screen.py</code></td><td><span class="tag low">Low</span></td><td>Quarterly, 03:00 on the 15th of January, April, July and October</td></tr>
+<tr><td>ORCID public records</td><td>The public ORCID record of each researcher whose ORCID iD OpenAlex gives for a UVM author.</td><td><code>fetch/researchers/orcid_records.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>ROR organizations</td><td>The ROR record of each US funder that has a ROR id, and its parents, so horizon can tell a funder's type.</td><td><code>fetch/reference/ror_organizations.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>ClinicalTrials.gov (API v2)</td><td>Studies registered by UVM and its peers.</td><td><code>fetch/peers/clinical_trials.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>NIH RePORTER and NSF Awards APIs</td><td>NIH and NSF research dollars by fiscal year for UVM and its peers.</td><td><code>fetch/peers/federal_awards.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="uvm">UVM itself</h2>
+<p>This section covers what UVM publishes on its own sites and the one internal system horizon reads.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Source</th><th>What it gives horizon</th><th>Module</th><th>Tier</th><th>Declared cadence</th></tr></thead>
+<tbody>
+<tr><td>SPA award and proposal registers, on www.uvm.edu</td><td>The spreadsheets SPA publishes on its annual and quarterly reports page: one row per award action, and proposals submitted by college and department.</td><td><code>fetch/awards/award_registers.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>SPA departmental assignments, on www.uvm.edu</td><td>Which SPA pre-award officer serves each department. The table is a Flourish embed, so a fetch reads the SPA page and then the embed.</td><td><code>fetch/proposals/spa_assignments.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>UVM unit pages: sitemap</td><td>The inventory of unit pages from which horizon builds the requirements corpus, read from www.uvm.edu/sitemap.xml.</td><td><code>fetch/requirements/uvm_units.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>UVM unit pages and the files they link</td><td>The pages in that inventory, stored as their canonical article fragment, and the PDFs and Word files they link. The fetch follows only www.uvm.edu.</td><td><code>fetch/requirements/unit_corpus.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>UVM catalogue faculty lists</td><td>Faculty and emeriti names, titles, departments and degrees, from catalogue.uvm.edu.</td><td><code>fetch/researchers/uvm_catalogue_faculty.py</code></td><td><span class="tag low">Low</span></td><td>Weekly, Monday 05:00</td></tr>
+<tr><td>UVM public directory</td><td>A search of www.uvm.edu/people for researchers the catalogue does not list (research staff, postdocs, administrators). Name, title and department only.</td><td><code>fetch/researchers/uvm_directory.py</code></td><td><span class="tag low">Low</span></td><td>Daily, 06:00</td></tr>
+<tr><td>SharePoint sites, through Microsoft Graph</td><td>The documents and site pages of seven UVM-wide SharePoint sites, read with the owner's delegated sign-in, using GET requests only.</td><td><code>fetch/institutional/</code></td><td><span class="tag mod">Moderate</span></td><td>Weekly, Saturday 02:00</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="later">Not taken from anywhere yet</h2>
+<p>The README and <code>AGENTS.md</code> name <em>inventions</em> and <em>outcomes</em> as domains that come later,
+and post-award as one of the stages horizon is meant to serve. The code has no Source for any of
+them, and no document in the repository names the system that would feed them.</p>
+
+</main>
+</body>
+</html>

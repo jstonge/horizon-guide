@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: evaluation</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --yes: #2d7a46; --yes-bg: #e3f3e8;
+    --ask: #8a6a00; --ask-bg: #f8f0d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --yes: #7fcf98; --yes-bg: #1a3324;
+      --ask: #e3c766; --ask-bg: #352e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.93rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.name { white-space: nowrap; font-weight: 600; }
+  td.small { font-size: 0.88rem; color: var(--muted); }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .tag.prop { color: var(--prop); background: var(--prop-bg); }
+  .tag.yes { color: var(--yes); background: var(--yes-bg); }
+  .tag.ask { color: var(--ask); background: var(--ask-bg); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin: 16px 0; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+  .card h3 { margin: 0 0 6px; }
+  .card p, .card li { margin: 4px 0; font-size: 0.94rem; }
+  .card ul { padding-left: 18px; margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Evaluation</h1>
+<p class="lede">How horizon measures its tools today, what Anthropic's method for tools adds, and
+the one level we do not measure yet: whether an agent with our tools and skills finishes a task.</p>
+<p class="stamp">Written 2026-11-01 against <code>main</code> at <code>fee60a73</code>. Companion to
+<a href="tools-skills-mcp.html">tools-skills-mcp.html</a>. Every number below is cited with its
+recorded MLflow run, as AGENTS.md requires; run links open through the tunnel to the tracking
+server on codec-dev (<code>docs/mlflow-access.md</code>). The rules are in
+<code>docs/evals/README.md</code> and <code>docs/evals/design.md</code>, which win where this page
+differs. Sections 5 and 6 are <span class="tag prop">proposed</span> designs for the owner to rule
+on.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#anthropic">1. Anthropic's method</a>
+  <a href="#levels">2. What horizon measures</a>
+  <a href="#benchmarks">3. The four benchmarks</a>
+  <a href="#rules">4. The rules every benchmark follows</a>
+  <a href="#pass">5. Pass rate and cost, tool by tool</a>
+  <a href="#agent">6. The missing level: agents</a>
+  <a href="#open">7. To rule</a>
+</nav>
+
+<h2 id="anthropic">1. Anthropic's method</h2>
+<p>Anthropic's <a href="https://www.anthropic.com/engineering/writing-tools-for-agents">Writing tools
+for agents</a> builds tools around an evaluation loop, not after one:</p>
+<ol>
+  <li><strong>Write many tasks from real use,</strong> each with an outcome that can be checked.
+    Strong tasks state an outcome, need several calls and leave room for judgment. Weak tasks are
+    one call in disguise. The examples problems-and-tools.html quotes in section 5 come from
+    here.</li>
+  <li><strong>Run each task as an agent loop</strong> with the tools, and have the agent say what
+    it is doing before each call.</li>
+  <li><strong>Collect the metrics</strong>: whether the answer is right, runtime, the number of
+    tool calls, tokens and tool errors.</li>
+  <li><strong>Read the transcripts.</strong> Redundant calls point at a missing filter or a reply
+    that is too long. A wrong tool points at a description. An error the agent could not recover
+    from points at a message.</li>
+  <li><strong>Improve the tools</strong>, with Claude's help if useful, and check the change against
+    held-out tasks so the tools do not fit the tasks they were tuned on.</li>
+</ol>
+
+<p>Anthropic's cookbook <a href="https://platform.claude.com/cookbook/cost-optimization-cost-optimization">Cost
+optimization on the Claude API</a> starts from the same place: get the task working on a capable
+model, then build an eval that measures <strong>both pass rate and cost per task</strong>, set a
+baseline and a quality bar, and only then lower costs. Its levers, in the order it applies them,
+from least to most risk to quality: prompt caching, input size (narrow tools, deferred tools),
+context in long agent loops, output shape, batching, and last the model and its effort. A lever is
+kept only if the pass rate holds.</p>
+
+<h2 id="levels">2. What horizon measures</h2>
+<p class="claim">Horizon measures what a tool returns, carefully. It does not yet measure what an
+agent does with it.</p>
+<p><code>docs/evals/design.md</code>, section 5, names two levels for every tool, in order, and a
+third for later:</p>
+<div class="scroll"><table>
+  <tr><th>Level</th><th>The question</th><th>How horizon answers it</th></tr>
+  <tr><td class="name">Component</td><td>Is the core's output good?</td>
+    <td>A benchmark: a frozen dataset of keyed questions, arms read against their parent, recorded
+      runs in MLflow. Four exist, in section 3.</td></tr>
+  <tr><td class="name">Contract</td><td>Does the tool keep its promises: its schema, honest
+    <code>lanes</code>, latency, cost, evidence on every row?</td>
+    <td>Tests, mostly with no labels. A lookup tool gets only these: the documents tools,
+      <code>uvm_requirements_read</code>, <code>_outline</code> and <code>_units</code>, and
+      <code>draft_read</code>'s 12,000-character cap.</td></tr>
+  <tr><td class="name">Agent</td><td>Does an agent using several tools finish a task?</td>
+    <td>Not measured. design.md calls it later: "traces, a Moderate experiment, restricted".</td></tr>
+</table></div>
+<p>The agent level is where Anthropic's method lives, and where this page's open questions sit:
+search-first routing, whether <code>proposals_read</code> saves calls, whether the rewritten
+descriptions changed which tool a model picks, and whether a skill helps.</p>
+
+<h2 id="benchmarks">3. The four benchmarks</h2>
+<p>Each lives in <code>evals/&lt;subject&gt;/&lt;name&gt;/</code> with a <code>BRIEF.md</code>
+(the question, why, the bar), a frozen dataset and a ledger of its recorded runs.</p>
+<div class="cards">
+  <div class="card">
+    <h3><code>uvm_requirements_search</code>: the requirements gate</h3>
+    <p><strong>Question.</strong> For a question a researcher asks, does the tool hand back the
+      documents that answer it, and does the text it hands over hold the facts the answer needs?</p>
+    <ul>
+      <li><strong>Dataset:</strong> 204 questions with 727 required facts, key version
+        <code>2026-10-05b</code>, authored at <code>/grading</code>, split into held-out and tuning
+        questions.</li>
+      <li><strong>Bar</strong> (owner, 2026-10-21): required facts held, paired per question
+        against the parent with a 95% interval, top-1 not significantly worse.</li>
+      <li><strong>Recorded:</strong> arm 0, the tool as served, holds 534 of 727 facts with 162
+        questions right at top-1: run
+        <a href="http://127.0.0.1:5055/#/experiments/3/runs/57c3a9ad6125400f9f9550c002c0a219"><code>57c3a9ad6125400f9f9550c002c0a219</code></a>.</li>
+      <li><strong>Also:</strong> a Claude-session judge grades whether a run's hand-over states each
+        fact (<code>evals/requirements/judge.py</code>). Most current settings were measured in the
+        archive on older key sets; the brief's table says which.</li>
+      <li><strong>Limit:</strong> facts held measure the hand-over, not the answer a model gives.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><code>opportunities_match</code>: the awards benchmark</h3>
+    <p><strong>Question.</strong> Given the papers a UVM researcher published before an award, does
+      the matching pipeline rank the call that funded it in its top 10?</p>
+    <ul>
+      <li><strong>Dataset:</strong> <code>awards-2026-10-20</code>.</li>
+      <li><strong>Bar</strong> (spec 1): recall at 10 no more than 2 points below the parent, with a
+        log-rank guard; an interval that straddles the bar is inconclusive.</li>
+      <li><strong>Status:</strong> exploratory, no shipping decision. The baseline is arm 1, run
+        <code>f046016e70b44c7ba4e95e1a0e2cc26b</code>. A smaller embedding model and dropping the
+        reranker were rejected or inconclusive against it (<code>evals/opportunities/matching/LEDGER.md</code>).</li>
+      <li><strong>Limit:</strong> arms run through <code>rank.py</code>, a copy of the pipeline held
+        to it by a parity test, until the runner calls the tool itself.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><code>opportunities_eligibility</code>: pass 1</h3>
+    <p><strong>Question.</strong> Before any proposal exists, how much can the platform filter out for
+      a user, and how often does it hide a call they could apply to?</p>
+    <ul>
+      <li><strong>Bar</strong> (decision 0013, item 9): no hard error, and at the default threshold
+        hide at least as many open calls as the parent without wrongly hiding more awarded
+        calls.</li>
+      <li><strong>Status:</strong> draft. Routine runs only, none recorded, so no number is cited.
+        The trust sample, the person table and extraction stability are one-time findings under
+        <code>findings/2026-10-21-*</code>.</li>
+      <li><strong>Open:</strong> the default threshold.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><code>checklist_read</code>: the checklist drafter</h3>
+    <p><strong>Question.</strong> Given a call's documents, does the checklist hold everything a UVM
+      team must produce or do, each item quoting its source?</p>
+    <ul>
+      <li><strong>Dataset:</strong> keys for eight calls (<code>2026-10-28d</code>), four of them
+        measured. The other 22 keys wait on documents.</li>
+      <li><strong>Bar:</strong> deliverables recall is the headline. Owner, 2026-10-26: no drafter
+        change may lower strict section recall or lose grounding, and every merge request that
+        changes the drafter cites its recorded run.</li>
+      <li><strong>Recorded:</strong> !81, the documents pass asking for the online form's
+        narratives, raised deliverables recall from 0.85 to 0.87 and strict section recall from 0.61
+        to 0.73, and was adopted: run
+        <a href="http://127.0.0.1:5055/#/experiments/10/runs/940f7e612ee142728fa42e6ac97e17c1"><code>940f7e612ee142728fa42e6ac97e17c1</code></a>.
+        !80's parts prompt raised coverage but lowered strict section recall, so it was not
+        adopted: run
+        <a href="http://127.0.0.1:5055/#/experiments/10/runs/9be8395f6dcb49399b3045e093259a96"><code>9be8395f6dcb49399b3045e093259a96</code></a>.</li>
+      <li><strong>Limit:</strong> one draft per call, so a few points sit within run-to-run
+        variance.</li>
+    </ul>
+  </div>
+</div>
+<p>One benchmark was retired: the call-reading benchmark for the draft tools, on 2026-10-29. A
+deterministic test of the 12,000-character cap replaced it, under the rule that lookup tools get
+tests and ranking or judging tools get benchmarks.</p>
+
+<h2 id="rules">4. The rules every benchmark follows</h2>
+<p>From <code>docs/evals/README.md</code>, <code>design.md</code> and the owner's rulings. These
+already match most of Anthropic's step 5.</p>
+<div class="scroll"><table>
+  <tr><th>Rule</th><th>What it means</th></tr>
+  <tr><td class="name">A spec first</td><td>One page from <code>docs/evals/spec-template.md</code>,
+    agreed before any code.</td></tr>
+  <tr><td class="name">A frozen dataset</td><td>Inputs and labels under one sha256. A changed rule
+    makes a new version; the bytes live in the data root, git holds the manifest.</td></tr>
+  <tr><td class="name">An arm against its parent</td><td>Each arm differs from its parent in one
+    stage and is read against that parent only, within one condition: the same dataset, judge and
+    harness.</td></tr>
+  <tr><td class="name">Recorded, or not cited</td><td>A routine run is scratch. Only a recorded run,
+    from a clean commit, in the benchmark's own experiment, is cited, with its full id and
+    URL.</td></tr>
+  <tr><td class="name">The ledger</td><td>Every recorded run in a chain, parent by parent, generated,
+    never edited by hand.</td></tr>
+  <tr><td class="name">Held-out keys</td><td>Never tune against them; the gate reports them apart.
+    An honour rule, not a check.</td></tr>
+  <tr><td class="name">Tier decides where</td><td>A Low dataset runs anywhere. A Moderate one runs
+    on the box only, and only a Low summary leaves it.</td></tr>
+  <tr><td class="name">No API spend on judging</td><td>Judges and matchers run as pinned Claude
+    sessions on the subscription, never paid API calls.</td></tr>
+  <tr><td class="name">Ask before spending</td><td>Estimate the tokens of a multi-agent run and ask
+    the owner first, two or three agents at a time.</td></tr>
+</table></div>
+
+<h2 id="pass">5. Pass rate and cost, tool by tool <span class="tag prop">proposed</span></h2>
+<p class="claim">A pass is one item, judged yes or no. A benchmark's recall becomes a pass rate once
+the bar says what one item must reach.</p>
+<p>Our benchmarks report averages, such as facts held or deliverables recall. The cookbook's pass
+rate counts items that clear a stated bar. Both can come from the same run: the average says how
+far a change moved things, and the pass rate says how many items a person would be satisfied
+with. Where the line sits for each tool is the owner's call; this section proposes one.</p>
+
+<h3>Two kinds of cost</h3>
+<div class="scroll"><table>
+  <tr><th>Who pays</th><th>What it is</th><th>How it is read</th></tr>
+  <tr><td class="name">The caller's agent</td><td>The tokens our replies add to someone else's
+    context, and the calls a task takes. An outside user's assistant pays this.</td>
+    <td class="small">Reply size in characters and tokens, calls per task, from the transcript.</td></tr>
+  <tr><td class="name">Horizon</td><td>The models a tool runs inside: the reranker and Jev in search,
+    embedding and reranking in matching, the drafter behind a checklist, the Ask tabs' own model
+    calls.</td>
+    <td class="small">The call's <code>lanes</code> and the ledger's <code>cost_dollars</code>. A
+      drafted checklist is paid once per call and read many times, so it is reported per draft, not
+      per read.</td></tr>
+</table></div>
+<p>Cost per task is the two together for one task, in tokens and in dollars at API prices. Runs on
+the subscription report the dollars as an estimate, labelled as one.</p>
+
+<h3>Per tool</h3>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>Kind</th><th>A pass, per item</th><th>Its cost</th><th>Measured by</th></tr>
+  <tr><td class="name">uvm_requirements_search</td><td>ranking</td>
+    <td>A question passes when the hand-over holds every required fact. Below that, it passes at the
+      bar's share of facts if the owner sets one.</td>
+    <td class="small">Hand-over size (35,000-character budget), reranker and Jev calls, latency.</td>
+    <td class="small">The requirements benchmark (<code>make gate</code>). Its recorded run already
+      stores, for each of the 204 questions, which required facts the hand-over held. Counting the
+      questions that held all of them gives the pass rate from that run, without running the tool
+      again.</td></tr>
+  <tr><td class="name">opportunities_match</td><td>ranking</td>
+    <td>An award passes when the call that funded it ranks in the top 10. Recall at 10 is already
+      this pass rate.</td>
+    <td class="small">Embedding and reranker calls per query, reply size.</td>
+    <td class="small">The awards benchmark, already.</td></tr>
+  <tr><td class="name">opportunities_eligibility</td><td>judging</td>
+    <td>A call passes when no hard condition is wrong: no awarded call is hidden, and each keyed
+      condition gets its keyed verdict. Unknown is never a failure.</td>
+    <td class="small">Extraction is paid in the pipeline, once per call. At call time, reply size.</td>
+    <td class="small">The eligibility benchmark, once a run is recorded.</td></tr>
+  <tr><td class="name">checklist_read</td><td>judging (the drafter)</td>
+    <td>A call passes when every keyed deliverable is matched and no item loses its quote. Partial
+      credit stays in deliverables recall.</td>
+    <td class="small">The drafter's dollars per call (<code>cost_dollars</code>, recorded already),
+      reply size per read.</td>
+    <td class="small">The checklist benchmark, already.</td></tr>
+  <tr><td class="name">documents_search</td><td>ranking</td>
+    <td>A question about a call's texts ("the narrative's page limit") passes when the passage
+      holding the answer is in the hits.</td>
+    <td class="small">Reply size; BM25 has no model cost.</td>
+    <td class="small"><strong>Nothing yet.</strong> It ranks, so by house rule it should have a keyed
+      benchmark, and it has none.</td></tr>
+  <tr><td class="name">documents_list<br>documents_read<br>uvm_requirements_read<br>uvm_requirements_outline<br>uvm_requirements_units<br>proposals_list<br>draft_read<br>critiques_list</td><td>lookup</td>
+    <td>A test passes: the right record, the caps, the statuses.</td>
+    <td class="small">Reply size, which tests can pin.</td>
+    <td class="small">Deterministic tests, already. Their pass rate in use comes from the agent
+      level.</td></tr>
+  <tr><td class="name">draft_edit</td><td>write</td>
+    <td>A test passes: the write lands in the right section and every guard refuses what it
+      should.</td>
+    <td class="small">One Graph write per call.</td>
+    <td class="small">Tests, already. Whether an agent writes only when asked is the agent
+      level's.</td></tr>
+  <tr><td class="name">budget_compute<br>facts_read</td><td>arithmetic, lookup (proposed)</td>
+    <td>A test passes: the workbook's figures to the cent, a fact with its quote and review
+      state.</td>
+    <td class="small">None beyond the reply.</td>
+    <td class="small">Tests pinned to the workbook, as CODEC's are.</td></tr>
+</table></div>
+
+<h3>Per task, at the agent level</h3>
+<p>A task passes when its answer states every keyed fact, attributes each to the right source
+(the funder's half or UVM's, with its date), and contradicts none. The facts it states are counted
+too, so a near miss shows. Its cost is the agent's tokens, its calls, and the tools' own spend for
+those calls. This is the number the cookbook asks for before any cost lever: a pass rate and a cost
+per task, on the same tasks, so a cheaper setting is kept only if the pass rate holds.</p>
+
+<div class="note">
+  <p><strong>Cost levers wait for this.</strong> Prompt caching in the Ask tabs and the drafter is
+    the cookbook's first lever and is not on today: <code>model/client.ts</code> counts cached
+    tokens, but no request sets <code>cache_control</code>. The owner put it off on 2026-11-01 until
+    an eval measures pass rate and cost per task, so its saving can be shown and its quality
+    checked.</p>
+</div>
+
+<h2 id="agent">6. The missing level: agents <span class="tag prop">proposed</span></h2>
+<p class="claim">One task set, measured end to end, reused for every change to tools, descriptions
+and skills.</p>
+
+<h3>Why not yet, so far</h3>
+<p>The owner refused two narrower measurements. The call-reading benchmark was retired on
+2026-10-29. A five-question measurement of folding <code>uvm_requirements_outline</code> and
+<code>_units</code> into search was refused on 2026-10-30 as too small to tell two designs apart.
+Both measured one tool decision. An agent-level set would measure every later change to tools,
+descriptions and skills with the same tasks, so its cost is paid once.</p>
+
+<h3>The design</h3>
+<ul>
+  <li><strong>Tasks:</strong> twenty to thirty strong tasks, drawn from the problem-first skills in
+    tools-skills-mcp.html, section 2.3: find-funding, prepare-to-apply, draft-check, resubmission.
+    Each has facts a script can check: the right call id, the quoted sentence, the date given with a
+    rule, the funder's half and UVM's half kept apart.</li>
+  <li><strong>Low first.</strong> Tasks over published data need no account, so the set and its
+    transcripts are Low and run anywhere. Tasks over a proposal come later, on synthetic proposals
+    in a worktree database, as design.md's Moderate experiment.</li>
+  <li><strong>Held-out:</strong> a split, under the gate's honour rule.</li>
+  <li><strong>Run:</strong> headless Claude Code (<code>claude -p</code>) on the subscription,
+    against the <code>make tools-dev</code> host the gate already uses, with and without each
+    skill.</li>
+  <li><strong>Record per task:</strong> whether it passed (section 5's task rule) and each keyed fact,
+    then its cost: the agent's tokens in and out, the tool calls, which tools in which order, the
+    tools' own model spend and tool errors. A recorded run with each transcript as a trace, so two
+    runs line up task by task.</li>
+  <li><strong>Read the transcripts,</strong> not only the totals. Anthropic's point is that the
+    transcripts say why.</li>
+</ul>
+
+<h3>Its first uses</h3>
+<ol>
+  <li>Search-first routing (decision 0022, item 11's amendment): calls and answers, before and
+    after.</li>
+  <li>The <code>uvm-requirements</code> skill: with it, without it, and with only the server's
+    instructions. This answers whether its routing list can shrink to a pointer.</li>
+  <li><code>proposals_read</code>, once proposal tasks exist: does it cut the five calls that
+    "where does my proposal stand?" takes today?</li>
+</ol>
+
+<div class="note">
+  <p><strong>What thirty tasks can show.</strong> Large changes: a tool no longer chosen, a call
+    count that doubles, a fact that stops reaching the answer. Small differences fall inside
+    run-to-run variance, as they do in the checklist ledger. The set grows the way the checklist
+    keys grow, and each recorded run says how many tasks it ran.</p>
+  <p><strong>What it costs.</strong> One run of thirty tasks is thirty agent sessions plus reading
+    them, so each run is estimated and asked for first, under the owner's spending rule.</p>
+</div>
+
+<h2 id="open">7. To rule</h2>
+<ul>
+  <li><strong>What a pass is, per tool</strong> (section 5): all required facts or a share of them
+    for search, the top 10 for matching, every keyed deliverable for a checklist.</li>
+  <li><strong>A keyed benchmark for <code>documents_search</code>,</strong> the one ranking tool
+    without one.</li>
+  <li><strong>An agent-level task set at all,</strong> given the two narrower refusals, and as a Low
+    experiment first rather than design.md's Moderate one.</li>
+  <li><strong>Who writes the tasks and their keys.</strong> The gate's keys were authored at
+    <code>/grading</code>. Tasks with several keyed facts each may need the same review queue the
+    checklist keys use.</li>
+  <li><strong>Headless Claude Code as the harness,</strong> on the subscription, and which model it
+    pins.</li>
+  <li><strong>Whether a skill change needs a recorded run</strong>, as a drafter change already
+    does.</li>
+</ul>
+
+</main>
+</body>
+</html>

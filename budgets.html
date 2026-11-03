@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: budgets</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --yes: #2d7a46; --yes-bg: #e3f3e8;
+    --ask: #8a6a00; --ask-bg: #f8f0d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --yes: #7fcf98; --yes-bg: #1a3324;
+      --ask: #e3c766; --ask-bg: #352e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  pre { font: 0.85em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 10px 14px; border-radius: 6px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.93rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.name { white-space: nowrap; font-weight: 600; }
+  td.small { font-size: 0.88rem; color: var(--muted); }
+  td.num { text-align: right; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .tag.prop { color: var(--prop); background: var(--prop-bg); }
+  .tag.yes { color: var(--yes); background: var(--yes-bg); }
+  .tag.ask { color: var(--ask); background: var(--ask-bg); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin: 16px 0; }
+  .pair > div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+  .pair h3 { margin: 0 0 6px; }
+  .pair p, .pair li { margin: 4px 0; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Budgets</h1>
+<p class="lede">What an assistant needs to answer budget questions about a proposal or an award:
+the questions, what a budget is as data, the reference tables it is checked against, the checks,
+and the tools. Part of it is <span class="tag yes">built</span>: the facts table, the budget engine
+and <code>budget_compute</code> (merged 2026-11-02). The rest is
+<span class="tag prop">proposed</span>.</p>
+<p class="stamp">Written 2026-11-01; updated 2026-11-02 once decisions 0024 (facts as reviewed
+values) and 0025 (budgets: one calculator before UVMClick) were accepted and the first tools
+built. Companion to <a href="tools-skills-mcp.html#t-prop">tools-skills-mcp.html, section 1.4</a>.
+The budget model was drawn from SPA's Post Award Budget Review workbook, checked against five real
+UVM proposals the owner provided (kept outside git; <code>findings/2026-11-02-budget-handcheck/</code>).
+UVM's rates and identifiers come from pages the requirements corpus holds. Where this page and the
+decisions differ, the decisions win.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#today">1. What horizon holds today</a>
+  <a href="#questions">2. The questions</a>
+  <a href="#model">3. What a budget is</a>
+  <a href="#math">4. The arithmetic</a>
+  <a href="#reference">5. The facts a budget needs</a>
+  <a href="#checks">6. The checks</a>
+  <a href="#tools">7. The tools</a>
+  <a href="#logic">8. Where the logic lives</a>
+  <a href="#skill">9. The skill</a>
+  <a href="#source">10. Where budget data comes from</a>
+  <a href="#open">11. Ruled, and still open</a>
+</nav>
+
+<h2 id="today">1. What horizon holds today</h2>
+<p>A budget appears in two places, and neither is data a tool can compute on:</p>
+<ul>
+  <li>A checklist task of kind <code>budget</code>, drafted from the call's documents, such as
+    "a budget justification of at most 5 pages".</li>
+  <li>A file in the team's workspace in Teams, which <code>draft_read</code> can read as text.</li>
+</ul>
+<p>Before 2026-11-02 an assistant asked "is this budget realistic?" read the budget file as text,
+found UVM's rates with <code>uvm_requirements_search</code>, and did the arithmetic itself: the
+arithmetic a model gets wrong. Now it can call <code>budget_compute</code>, which reads the rates
+from the facts table and does the arithmetic as UVMClick does.</p>
+<div class="note">
+  <p><strong>UVM already has a budgeting system.</strong> SPA's fact sheet says "UVMClick proposal
+    budgeting system will calculate the fringe automatically, using the most current rates in effect
+    at the time of proposal creation." UVMClick is UVM's system of record for a proposal's budget.
+    So horizon's budget is a draft and a check before the budget goes into UVMClick, or a reading of
+    UVMClick's budget if horizon can ever reach it. It is not a second budgeting system: decision
+    0025, item 1, ruled the first.</p>
+</div>
+
+<h2 id="questions">2. The questions</h2>
+<p>Four kinds of question, each answered by a different mix of data, rules and judgment.</p>
+<div class="scroll"><table>
+  <tr><th>Question</th><th>Who asks</th><th>What answers it</th></tr>
+  <tr><td>"Build me a three-year budget: me at one summer month, a postdoc, a GRA, travel to two
+    conferences."</td><td>PI, with SPA</td>
+    <td class="small">UVM's chart of accounts, fringe rates and F&amp;A rate, and the arithmetic.
+      Deterministic once the inputs are entered.</td></tr>
+  <tr><td>"Does this budget follow UVM's rules?"</td><td>SPA, PI</td>
+    <td class="small">The same reference tables, as checks: a fringe rate missing for a year, an
+      F&amp;A rate that matches none of UVM's, an unknown account, effort below what was
+      promised.</td></tr>
+  <tr><td>"Does it fit the call?"</td><td>SPA, PI</td>
+    <td class="small">The sponsor's rules: a cap on the total or on indirect costs, a salary cap,
+      costs the call does not allow. These live in the call's checklist and the funder's guides,
+      as text today.</td></tr>
+  <tr><td>"Is it realistic given the narrative?"</td><td>PI, RD, SPA</td>
+    <td class="small">Judgment: effort against who owns which aim, cost categories against the
+      activities the narrative describes, size against funded awards in the program. A model with
+      a skill, never a tool.</td></tr>
+  <tr><td>"Which of my awards will end with money unspent?"</td><td>PI, SPA post-award</td>
+    <td class="small">The award's budget with its actual and projected spending, and its end
+      date.</td></tr>
+</table></div>
+
+<h2 id="model">3. What a budget is</h2>
+<p class="claim">Project years, each with lines in UVM's own accounts, and the people whose
+salaries the budget pays. Everything else is computed.</p>
+
+<h3>The parts, as built (budget-1)</h3>
+<div class="scroll"><table>
+  <tr><th>Part</th><th>What it holds</th><th>Notes</th></tr>
+  <tr><td class="name">Budget</td><td>The sponsor's F&amp;A rate as entered (or cap, or 0), the
+    base (MTDC or TDC), the location and purpose (the rate agreement's words), an escalation factor
+    per period, a label.</td>
+    <td class="small">The F&amp;A rate is the budget's own; UVM's agreement rate is looked up and
+      shown beside it.</td></tr>
+  <tr><td class="name">Period</td><td>One project year: id, label, start and end date.</td>
+    <td class="small">At most ten.</td></tr>
+  <tr><td class="name">Line</td><td>An id, a period, a Flevel, a description and an amount in
+    whole dollars.</td>
+    <td class="small">The spending columns (encumbrances, expenditures, projected) wait for
+      awards.</td></tr>
+  <tr><td class="name">Subaward</td><td>An id and an amount per period.</td>
+    <td class="small">The engine puts the first $25,000 of each in an MTDC base, across periods in
+      order.</td></tr>
+  <tr><td class="name">Person</td><td>A <code>person_key</code> ("lead", "postdoc-1"), never a name;
+    an employee type (the agreement's six classes); and per period either person-months in
+    thousandths (with appointment months and base salary today) or a flat wage.</td>
+    <td class="small">Salary and fringe are computed. A flat wage is for hourly students and
+      technicians.</td></tr>
+</table></div>
+
+<h3>UVM's chart of accounts</h3>
+<p>Lines are keyed by Flevel, UVM's sponsored-budget chart of accounts: 34 codes, of which SPA's
+public work instructions for budget transfer journals (Appendix A) list 33 with their F&amp;A
+treatment; the 34th is F6600, the F&amp;A line. Each has one of three F&amp;A types:</p>
+<div class="pair">
+  <div>
+    <h3>In the base (25)</h3>
+    <p>Direct costs that bear F&amp;A on an MTDC award: salary (F5000), fringe (F5990), supplies,
+      travel (F6050, F6052), publication costs, consultants and more.</p>
+  </div>
+  <div>
+    <h3>Excluded from the base (8)</h3>
+    <p>Participant costs (F6101), patient care, facility and equipment rental, acquisitions,
+      equipment over $5,000 (F6500), tuition (F6532), alterations and renovations.</p>
+  </div>
+</div>
+<p>The last code, F6600, is the F&amp;A line itself. A subaward is not split by hand between two
+Flevels: the engine computes its part in the base. SPA's per-category guidance is
+<code>spa/direct-cost-budget-categories</code>, which the requirements corpus holds.</p>
+
+<h3>What is stored and what is computed</h3>
+<p>Salary, fringe and F&amp;A are never stored. They are computed from the people and lines each
+time, so they cannot drift from their inputs. Revised budget and available balance are computed
+too. The budget stores only what a person entered.</p>
+
+<h2 id="math">4. The arithmetic</h2>
+<p>As UVMClick computes a proposal budget, pinned by the engine's tests and checked against five
+real proposals: AWD#2492 reproduces UVMClick's totals exactly, the others within a few dollars a
+line (decision 0025, A7). Whole dollars, integer arithmetic, rounded half away from zero.</p>
+<pre><code>monthly rate       = base salary today × (1 + escalation of period 1) ÷ appointment months
+salary, period 1   = round(monthly rate × person-months)
+salary, period n   = round(salary of period n−1 × (1 + escalation of period n))   same months
+fringe             = round(salary × the fringe rate of the person's type), per person and period
+base (MTDC)        = salaries + fringe + lines in the base + each subaward's first $25,000
+F&amp;A               = round(base × the budget's own F&amp;A rate), per period
+F&amp;A forgone       = round(base × UVM's agreement rate) − F&amp;A
+calculated rate    = F&amp;A ÷ base</code></pre>
+<ul>
+  <li><strong>One rate for every year.</strong> SPA: "Do not escalate F&amp;A costs or Fringe
+    costs. The approved and published rates at the time of proposal must be used for F&amp;A and
+    fringe." The engine takes the rates in effect on the first period's start; which date fixes
+    them is open with SPA (question 9). Charging each fiscal year's actual rate is how an award is
+    spent, not how a proposal is budgeted.</li>
+  <li><strong>The budget's rate, beside UVM's.</strong> A sponsor's cap or "no indirect costs" is
+    the budget's rate; UVM's agreement rate for the location and purpose is shown beside it with the
+    F&amp;A forgone. Neither number is corrected.</li>
+  <li><strong>A TDC budget</strong> puts every direct cost in the base, subawards whole.</li>
+  <li><strong>Escalation</strong> is a factor per period, from the first: SPA recommends up to 4%,
+    and the engine warns above it.</li>
+  <li><strong>Still open</strong> (A6, A7): whether UVMClick compounds on the rounded previous year
+    or the unrounded rate, whether it rounds fringe per person or on the sum, a person whose months
+    change between years, a nine-month faculty member's monthly rate, and one escalation for the
+    whole budget where workbooks raise named people and leave a hire not yet made at today's
+    rate.</li>
+</ul>
+
+<h2 id="reference">5. The facts a budget needs</h2>
+<p class="claim">Three kinds of fact, each with its own home: UVM's, the person's, and the
+budget's own.</p>
+
+<h3>UVM's facts are published, and horizon already crawls them</h3>
+<p>The requirements corpus holds the pages that state UVM's rates and identifiers. They are public
+pages and PDFs on www.uvm.edu, so their values are Low.</p>
+<div class="scroll"><table>
+  <tr><th>Page in the corpus</th><th>What it states</th></tr>
+  <tr><td class="name">spa/rate-agreement-0</td><td>UVM's federal rate agreement, the PDF the fact
+    sheet links. F&amp;A rates by location and purpose with effective dates, such as on-campus
+    research 53.0% for FY25 and 53.5% for FY26. Fringe rates by employee type with effective dates:
+    Regular Employees 52.5% for FY25 and 55.4% for FY26, and UVM Medical Group, Graduate Students,
+    Temporary Employees, Student Employees and Post Docs.</td></tr>
+  <tr><td class="name">spa/f-a-rates</td><td>The F&amp;A table by fiscal year from FY15 to FY27,
+    FY27 marked provisional. On-campus research is 53.5% for FY27.</td></tr>
+  <tr><td class="name">spa/spa-fact-sheet</td><td>UVM's legal entity, addresses, signing
+    officials, federal tax ids, UEI and the non-profit letter. Its fringe rule: "All proposals must
+    use the federally approved fringe benefit rates in effect at the time the proposal is
+    submitted", and the rates are on page 3 of the rate agreement.</td></tr>
+  <tr><td class="name">finance/benefit-rates</td><td>Which employee types get which benefit rate,
+    and that SPA receives future-year projected rates for multi-year proposals.</td></tr>
+</table></div>
+<p>The SPA fact sheet is the targeted document a budget needs, but as text. Horizon would turn it
+into data the way it turns a call's documents into checklist items. Each value (a rate, the EIN,
+the UEI, a signing official) is stored with the sentence it was read from, its source key and its
+effective dates. A value past its last effective date is not offered, and a provisional rate is
+served with its type.</p>
+<p>These facts have two readers: budgets, and every form that asks for UVM's EIN or UEI. The
+<code>uvm-requirements</code> skill already warns against copying an EIN from a stale aggregator. A
+fact lookup fixes that at the source, so it earns its own tool, <code>facts_read</code>
+(<a href="#tools">section 7</a>).</p>
+<div class="note">
+  <p><strong>Decision 0024, accepted and partly built.</strong> One table of facts, one row per
+    value: 18 rows today (<code>backend/dbt/seeds/facts.csv</code>, served as
+    <code>funding.facts</code>), all <code>not_reviewed</code> until SPA's first round. Each row
+    holds a scope (UVM, a funder guide or a call), a name from a fixed vocabulary
+    (<code>fa_rate</code>, <code>fringe_rate</code>, <code>ein</code>, <code>uei</code>,
+    <code>salary_cap</code>, <code>indirect_cap</code> ...), the value and its conditions, its
+    effective dates, the source's own sentence, and the source's sha256. A row is proposed by a
+    person or a model and confirmed by SPA. Every build checks each row against its source. A quote
+    no longer in the source is never served. A changed source or an unconfirmed row is served
+    marked.</p>
+  <p>No value enters without the funder's or UVM's own sentence from a document horizon holds. So
+    Sloan's indirect cap stays out until horizon holds Sloan's own guideline: a secondary source
+    says 15% above $50,000, and sloan.org refuses our fetch.</p>
+</div>
+<p>For a GRA, <code>spa/direct-cost-budget-categories</code> holds the GRA salary table, the
+comprehensive fees ("Use the amounts below for all budget periods, until otherwise changed") and the
+tuition rule; they are candidate facts, not yet rows.</p>
+
+<h3>A person's facts are entered per budget, never as a rate</h3>
+<p>A budget needs two facts about each UVM person it pays:</p>
+<ul>
+  <li><strong>Appointment months</strong>, 9 to 12. It decides whether summer salary exists and
+    how a monthly rate is computed.</li>
+  <li><strong>Employee type</strong>: regular, UVM Medical Group, post doc, graduate student and so
+    on. It decides the fringe type, and the fringe rate follows from the type and the fiscal
+    year.</li>
+</ul>
+<p>Decision 0025 enters both per budget and per person (the owner's ruling). A budget pays several
+people, and a profile describes only the person signed in. <code>budget_compute</code> stores
+nothing, so the values arrive in the call, and the skill asks for them ("a 9- or 12-month
+appointment?"). A profile field next to <code>academic_rank</code> and
+<code>appointment_percent</code> can come later as a default, once a stored budget exists and a tool
+reads it, and UVM's HR job data if a source and a tier ruling appear. A fringe rate is never
+stored on a person, because it changes every July 1. The budget holds the employee type, and the
+rate is looked up for each fiscal year.</p>
+
+<h3>Salary is entered in the budget, not the profile</h3>
+<p>Salary is sensitive, changes every year, and a person may not want their assistant to hold it in
+general. It is entered per budget and per person, and a first draft can leave it as a
+placeholder for the person to fill. People the budget pays who are not hired yet, such as "a
+postdoc" or "a GRA", are roles: each role gives a fringe type, and its salary is a reference fact or
+an amount the person enters.</p>
+
+<h3>The example, step by step</h3>
+<p>"Build me a three-year budget: me at one summer month, a postdoc, a GRA, travel to two
+conferences."</p>
+<ol>
+  <li><strong>Me.</strong> The skill asks for my appointment months and employee type: a 9-month
+    appointment, a regular employee. Salary is entered or left as a placeholder. One summer month a year goes on F5000, and fringe on F5990 at
+    Regular Employees' rate for each fiscal year.</li>
+  <li><strong>The postdoc.</strong> A role with the Post Docs fringe type, 12 months, at the salary
+    the person enters or the postdoc floor.</li>
+  <li><strong>The GRA.</strong> The Graduate Students fringe type and a stipend, plus tuition on
+    F6532, which is outside the F&amp;A base.</li>
+  <li><strong>Travel.</strong> Two lines on F6050 each year.</li>
+  <li><strong>Rates.</strong> <code>budget_compute</code> reads F&amp;A and fringe from the facts
+    table, one rate for every year, as of the first period's start. A missing rate is reported,
+    never guessed. Each rate in the reply names its page and the sentence it came from.</li>
+  <li><strong>The draft.</strong> The totals, the checks, and the note that SPA enters the final
+    budget in UVMClick.</li>
+</ol>
+
+<h3>UVM's chart of accounts</h3>
+<p>The chart's codes and F&amp;A types are public (SPA's budget transfer journal instructions,
+Appendix A), so the chart is Low (decision 0025, item 9).</p>
+
+<h2 id="checks">6. The checks</h2>
+<p>A check either finds a fact a person must confirm or does arithmetic a model can get wrong. None
+changes a number. Three groups, by what each needs.</p>
+
+<h3>Built: against UVM's facts and the budget itself</h3>
+<div class="scroll"><table>
+  <tr><th>Kind</th><th>When it fires</th></tr>
+  <tr><td class="name">no_periods</td><td>The budget has no project years.</td></tr>
+  <tr><td class="name">no_fringe_rate</td><td>No fact gives the rate for a person's employee type.
+    Fringe is zero with the reason, never a guessed rate.</td></tr>
+  <tr><td class="name">no_fa_rate</td><td>No fact gives UVM's rate for the budget's location and
+    purpose; the budget's own rate is used and nothing is compared.</td></tr>
+  <tr><td class="name">no_subaward_limit</td><td>No fact gives the subaward limit; the F&amp;A on up
+    to $25,000 per subaward may be missing.</td></tr>
+  <tr><td class="name">unknown_flevel</td><td>A line's account is not in the chart. It counts in
+    the total but in no base.</td></tr>
+  <tr><td class="name">under_committed</td><td>A person is budgeted fewer person-months than
+    committed.</td></tr>
+  <tr><td class="name">fa_rate_off_table</td><td>The budget's F&amp;A rate differs from UVM's for its
+    location and purpose. Fine if it is the sponsor's limit; both are shown.</td></tr>
+  <tr><td class="name">rate_not_reviewed</td><td>A fact used is not confirmed by SPA.</td></tr>
+  <tr><td class="name">escalation_over_recommended</td><td>A period's escalation is above SPA's
+    recommended 4%.</td></tr>
+</table></div>
+
+<h3>Against the call <span class="tag prop">proposed</span></h3>
+<p>These need the sponsor's budget rules as facts with a call or guide scope (decision 0025, item 8;
+0024's addendum: typed from the call's own checklist items, any category). None is held yet, and
+<code>budget_compute</code> says so when given a <code>call_id</code>.</p>
+<ul>
+  <li>The total, or a year, over the call's ceiling.</li>
+  <li>Indirect costs over a sponsor's cap.</li>
+  <li>Salary over a sponsor's salary cap, such as NIH's.</li>
+  <li>Senior personnel salary over NSF's limit on months per year, from the PAPPG.</li>
+  <li>A line in a category the call does not allow.</li>
+</ul>
+<p>Each would quote the sentence it rests on, as checklist items do, and name the guide edition in
+effect. A rule the call states only in prose stays a judgment until someone writes it as data.</p>
+
+<h3>Judgment, left to the model</h3>
+<ul>
+  <li>Does each person's effort fit what the narrative gives them?</li>
+  <li>Does each activity in the narrative have a cost, and each cost an activity?</li>
+  <li>How does the total compare with funded awards in the same program?</li>
+</ul>
+
+<h2 id="tools">7. The tools</h2>
+<p>Following <a href="tools-skills-mcp.html#tools">tools-skills-mcp.html</a>'s rule: a read returns
+the record with its checks, and a write groups actions that have the same consequence.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>Who</th></tr>
+  <tr><td class="name">budget_compute <span class="tag yes">built</span></td>
+    <td>A budget-1 passed in the call, up to five what-ifs (lists of changes: <code>add_*</code>,
+      <code>set_*</code>, <code>remove_*</code>, <code>add_period</code>, <code>set_rate</code>),
+      an optional <code>call_id</code>. It returns the inputs as one table, the totals per period
+      (the budget's rate, UVM's, the F&amp;A forgone), the checks, each what-if's differences, and
+      each fact used with its quote. It stores nothing and logs no argument.</td>
+    <td><span class="tag low">Low</span> anyone</td></tr>
+  <tr><td class="name">facts_read <span class="tag prop">proposed</span></td>
+    <td>Facts as values, in a scope: UVM's, a <code>guide_id</code>'s or a <code>call_id</code>'s,
+      with an optional name, conditions and date. Each value with its sentence, source, dates and
+      review state. Decision 0024, item 6.</td>
+    <td><span class="tag low">Low</span> anyone, services too</td></tr>
+  <tr><td class="name">budget_compare <span class="tag prop">proposed</span></td>
+    <td>A proposal's budget documents read against each other: the sponsor's budget form, the
+      justification and the department workbook where one exists. Every disagreement with both
+      values and their quotes, each limit exceeded, each question a rule cannot settle. Decision
+      0025's addendum, A4, behind a keyed benchmark (A5).</td>
+    <td><span class="tag mod">account</span> parties to the proposal</td></tr>
+  <tr><td class="name">budget_read, budget_edit <span class="tag prop">later</span></td>
+    <td>A stored working copy of a budget and its edits. Waiting on a tier ruling on a stored
+      budget with salaries (decision 0025, item 6), and on the Teams workbook (section 8).</td>
+    <td><span class="tag mod">account</span></td></tr>
+  <tr><td class="name">awards_read <span class="tag prop">later</span></td>
+    <td>An award, with its budget and each line's encumbrance, expenditure, projected amount and
+      available balance per year.</td>
+    <td><span class="tag ask">tier to rule</span></td></tr>
+</table></div>
+<p>What <code>budget_compute</code> said on an invented two-year budget (2026-11-02):</p>
+<pre><code>$427,246 in total over 2 periods: $298,203 direct and $129,043 F&amp;A at 53.5% on a base of
+$241,203. 4 checks. Sponsor limits were not checked: no call_id was given. SPA enters the final
+budget in UVMClick; this is a working calculation.</code></pre>
+
+<h2 id="logic">8. Where the logic lives</h2>
+<p class="claim">The arithmetic lives in one tool. The workbook is what people look at and edit. The
+skill holds the method.</p>
+
+<h3>Three places logic can live</h3>
+<div class="scroll"><table>
+  <tr><th>Mechanism</th><th>Where it runs</th><th>Who gets it</th><th>Good for</th></tr>
+  <tr><td class="name">A tool on horizon's MCP server</td>
+    <td class="small">Horizon's server.</td>
+    <td class="small">Every client that connects: Claude Code, Claude Desktop, claude.ai, Cursor, an
+      agent on an open-weights model.</td>
+    <td class="small">Answers that must be the same for everyone and correct: the arithmetic, UVM's
+      rates by fiscal year, the checks, writing to Teams as the person.</td></tr>
+  <tr><td class="name">A skill with scripts</td>
+    <td class="small">The client's own sandbox. Anthropic's own xlsx skill works this way. Python with
+      openpyxl writes the workbook, and a LibreOffice step recalculates its formulas.</td>
+    <td class="small">Only clients that load skills and can run code: Claude Code, and claude.ai with
+      code execution.</td>
+    <td class="small">Producing a file and formatting it. The numbers it computes are whatever the
+      script's copy of the rules says.</td></tr>
+  <tr><td class="name">A file in a workspace: an Excel workbook in Teams</td>
+    <td class="small">Microsoft's Excel, reached through Microsoft Graph, as
+      <code>draft_read</code> reaches a team's drafts today.</td>
+    <td class="small">People in Teams and Excel, and any agent with a tool that reads and writes it.</td>
+    <td class="small">Where people already work. They see the formulas, change a cell and watch the
+      totals move.</td></tr>
+</table></div>
+<p>JSON is not a fourth mechanism. It is the shape of a budget (years, lines by Flevel, people, the
+changes of a what-if) that the three share, and defining it once is what lets them agree.</p>
+
+<h3>The line between a tool and a skill</h3>
+<ul>
+  <li>A tool does what must be right and shared: the arithmetic, UVM's rates, the checks, and reading
+    or writing the team's workbook as the person. A skill's script would be a second copy of the
+    arithmetic, on someone else's machine, with the rates it shipped with, and invisible to an
+    outside user whose client cannot run code.</li>
+  <li>A skill holds the method: which questions to ask before building ("a 9- or 12-month
+    appointment?"), which what-ifs are worth trying near a cap, how to present a check, and when to
+    say SPA enters the final budget in UVMClick. It can use the xlsx skill to hand a person a
+    formatted file, whose numbers come from the tool.</li>
+  <li>The workbook is the team's working view. It does not hold the rules.</li>
+</ul>
+
+<h3>The design, in five parts</h3>
+<ol>
+  <li>The budget's shape is the contract, as JSON: budget-1, years, lines by Flevel, subawards and
+    people. <span class="tag yes">built</span></li>
+  <li><code>budget_compute</code> is the one authority for the arithmetic. It is stateless and Low. A
+    budget plus what-if changes go in, and totals and checks come out, with each what-if's
+    difference beside the base. It stores nothing, and the tool layer never logs a call's
+    arguments, so a salary passed in a call is not kept. <span class="tag yes">built</span></li>
+  <li>The platform makes an Excel workbook in the team's Teams folder, as it makes Markdown drafts
+    today. Horizon owns the template, so it can read the workbook back, which solves the problem
+    that every team's spreadsheet differs. The workbook can carry formulas for people to tweak by
+    hand. On reading it back, horizon recomputes with the engine and reports each cell where the
+    workbook disagrees, and never corrects it silently. <span class="tag prop">dropped for now</span>
+    (decision 0025, C5): a third budget beside UVMClick and the sponsor's forms, a stored workbook
+    with salaries needs a tier ruling, and a Graph write into an open workbook needs a hand test.</li>
+  <li><code>budget_edit</code> writes the inputs through Graph, as <code>draft_edit</code> writes a
+    section, and never the computed cells. <span class="tag prop">with the workbook</span></li>
+  <li>The <code>budget-build</code> skill (<span class="tag yes">built</span>) and a later
+    <code>budget-review</code> hold the method and call the tools.</li>
+</ol>
+
+<div class="note">
+  <p><strong>Three copies of the arithmetic.</strong> The engine, the workbook's formulas and any
+    skill script can drift apart. One authority, and a check of the others against it on read-back,
+    is how horizon's AGENTS.md treats a copy: a row in <code>backend/tests/test_copies.py</code>.</p>
+  <p><strong>A person editing while the agent writes.</strong> The Markdown editor once saved over an
+    upload while someone typed, in a hand test on 2026-10-26. Excel Online's co-authoring may handle
+    a Graph write into an open workbook better. That is not verified, and <code>budget_edit</code>
+    needs a hand test before it writes into a workbook people have open.</p>
+</div>
+<p>UVMClick stays the record. The Teams workbook is the team's working copy before SPA enters the
+budget in UVMClick, and an export from UVMClick could seed it.</p>
+
+<h2 id="skill">9. The skill</h2>
+<p>A problem-first <code>budget-review</code> skill, from the
+<a href="problems-and-tools.html#budget">worked example</a>, now with the checks above:</p>
+<ol>
+  <li>Call <code>budget_read</code>. Report every check, and say which are rule violations and which
+    ask a person to confirm.</li>
+  <li>Call <code>checklist_read</code> and <code>documents_search</code> for the call's budget rules.
+    Compare the totals with each one, quoting it.</li>
+  <li>Call <code>draft_read</code> on the narrative. Compare each person's effort with the aims they
+    own, and each activity with a cost line.</li>
+  <li>Compare the total with funded awards in the program, once <code>awards_read</code> can list
+    them.</li>
+  <li>Label each finding as a UVM rule, a sponsor rule, a comparison or an opinion.</li>
+</ol>
+<p>What the skill teaches that no tool says: a rate that differs from UVM's table may be the
+sponsor's limit and correct; a provisional rate is not wrong; a missing fringe rate is not zero
+fringe.</p>
+
+<h2 id="source">10. Where budget data comes from</h2>
+<div class="scroll"><table>
+  <tr><th>Source</th><th>What it gives</th><th>What it costs</th></tr>
+  <tr><td class="name">UVMClick</td><td class="small">The budget SPA actually submits, computed by
+    UVM's own system with the current rates.</td><td class="small">Not reachable from horizon today,
+    and not known whether it can be. The authoritative budget, if it can be read.</td></tr>
+  <tr><td class="name">A UVMClick export</td><td class="small">The budget as UVMClick holds it, in one
+    known format. Its Financials summary gives each year's totals; whether its detail can be
+    exported is not known.</td><td class="small">One reader would cover every proposal SPA
+    enters.</td></tr>
+  <tr><td class="name">The sponsor's forms and the justification</td><td class="small">NSF's
+    Summary Proposal Budget, the R&amp;R budget, and the budget justification: in every
+    proposal.</td><td class="small">Fixed forms suit a reader; read year by year, since a cumulative
+    page can mislabel lines.</td></tr>
+  <tr><td class="name">A workbook the platform makes in Teams</td><td class="small">The team's working
+    budget in a template horizon owns, so horizon can read it back.</td><td class="small">Graph
+    writes, and a hand test of writing while someone has it open.</td></tr>
+  <tr><td class="name">A budget form in the app</td><td class="small">The budget as a form section of the proposal, with a personnel builder and lines by
+    Flevel, live totals, and the budget compiled into the proposal's Word file from the stored
+    data.</td><td class="small">A new part of the app and its tables. People enter what they now
+    type into a spreadsheet.</td></tr>
+  <tr><td class="name">The department workbook</td><td class="small">SPA's Proposal Budget
+    Spreadsheet, when a department uses it: fixed layout, every row marked.</td><td class="small">
+    Optional: SPA now has budgets made in UVMClick, and the template is no longer in its Forms
+    Library.</td></tr>
+  <tr><td class="name">The PI Portal export</td><td class="small">For awards: PeopleSoft's
+    Transactions Detail export already carries each transaction's Flevel (Budget Account), so no
+    mapping is needed. Open POs feed encumbrances.</td>
+    <td class="small">An export a person runs and uploads. Salary, fringe and F&amp;A rows are
+      filtered out of it and come from the salary review instead. Purchasing-card rows can be
+      back-dated.</td></tr>
+</table></div>
+<p>The two are not exclusive. A form gives proposals a budget as data. The export gives awards
+their spending. An award's budget can start as a copy of its proposal's.</p>
+
+<h3>The order to build in</h3>
+<ol>
+  <li>The facts table and the engine. <span class="tag yes">built</span></li>
+  <li><code>budget_compute</code> and the <code>budget-build</code> skill.
+    <span class="tag yes">built</span></li>
+  <li><code>facts_read</code>, the facts alarms, and SPA's first review round.</li>
+  <li><code>budget_compare</code> and its keyed benchmark, from the five proposals' findings.</li>
+  <li>A stored working copy and a workbook, once item 6's tier ruling and the Graph hand test are
+    done; then awards.</li>
+</ol>
+
+<h2 id="open">11. Ruled, and still open</h2>
+<p>Ruled by the owner on 2026-11-01 (decisions 0024 and 0025):</p>
+<ul>
+  <li>Horizon's budget is a calculator and working copy before SPA enters the budget in UVMClick,
+    the record.</li>
+  <li>The tool is <code>facts_read</code>; whoever SPA names confirms facts, recorded as the office
+    and the date.</li>
+  <li>Appointment months and employee type are entered per budget and per person.</li>
+  <li>Colleagues' salaries may go to the caller's model provider for the call only, nothing
+    stored, the skill advising a provider UVM has a contract with.</li>
+  <li>No scaffolded workbook and no generated numbers in the justification, for now.</li>
+</ul>
+<p>Still open:</p>
+<ul>
+  <li><strong>For SPA</strong> (decision 0025): the subaward and equipment thresholds against the
+    federal $50,000 and $10,000 (question 8); which date fixes the rates (9); a nine-month faculty
+    member's monthly rate (11); and the two rounding questions of A7.</li>
+  <li><strong>For the owner:</strong> the addendum's A-1 to A-3 (<code>budget_compare</code> as an
+    account tool, a model reading the justification, the category mapping's tier), and the tier of
+    a stored budget with salaries.</li>
+</ul>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One question, end to end</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --ask: #8a6a00; --ask-bg: #f8f0d0;
+    --ext-bg: #f3e8f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --ask: #e3c766; --ask-bg: #352e14;
+      --ext-bg: #33213b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  ol.calls li { margin: 6px 0; }
+  figure { margin: 24px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; max-width: 80ch; }
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-ext { fill: var(--ext-bg); stroke: var(--line); stroke-width: 1.5; }
+  .d-low { fill: var(--low-bg); stroke: var(--low); stroke-width: 1.3; }
+  .d-mod { fill: var(--mod-bg); stroke: var(--mod); stroke-width: 1.3; }
+  .d-title { fill: var(--fg); font: 600 14px system-ui, sans-serif; }
+  .d-num { fill: var(--accent); font: 600 12px system-ui, sans-serif; }
+  .d-text { fill: var(--fg); font: 12px system-ui, sans-serif; }
+  .d-sub { fill: var(--muted); font: 11.5px system-ui, sans-serif; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .d-head { fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>One question, end to end</h1>
+<p class="lede">A person asks their own assistant about their own proposal. What runs where, and
+which parts are the agent, the skill, the MCP server and the tools.</p>
+<p class="stamp">Written 2026-11-01 against <code>main</code> at <code>960c6c3a</code>. An
+explainer, not a decision. Companion to <a href="problems-and-tools.html">problems-and-tools.html</a>
+and <a href="proposed-capabilities.html">proposed-capabilities.html</a>.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#question">1. The question</a>
+  <a href="#parts">2. The four parts</a>
+  <a href="#diagram">3. The picture</a>
+  <a href="#request">4. One request, step by step</a>
+  <a href="#calls">5. The calls for the budget question</a>
+  <a href="#platform">6. The second way in</a>
+  <a href="#runout">7. Where the flow runs out</a>
+  <a href="#store">8. Moderate is a store, not a tool</a>
+</nav>
+
+<h2 id="question">1. The question</h2>
+<p>The horizon platform may ask: <em>"I'm interested in this grant. Find everything
+I'd need to specify a budget."</em></p>
+<p>A staff member asking about someone else's proposal passes a <code>proposal_id</code>.
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/proposals/access.ts">access.ts</a> decides from their relation to that
+proposal (owner, member, <code>routed_spa</code>, <code>rd_pool</code> and so on) whether they see it.
+A director or research staff looking at a whole group would be a new relation or role there, not a
+new kind of tool. That is to be specified later.</p>
+
+<h2 id="parts">2. The four parts</h2>
+<p><strong>The agent</strong> is the model. It runs in the person's own client and decides which tools to
+call and how to write the answer. horizon does not run it on this path.</p>
+<p><strong>The skill</strong> is a folder of instructions. It teaches judgment, not data: quote dates, keep
+UVM's half apart from the funder's, never call a scanned document missing. In Anthropic's terms it is
+"tool-first". Claude Desktop users get it separately. The MCP Skills extension (SEP-2640, Final) could
+serve a skill from the server, but Claude Code, Desktop and Cursor do not support it yet
+(modelcontextprotocol <code>docs/extensions/client-matrix.mdx</code>).</p>
+<p><strong>The MCP server</strong> is the protocol frame. It lists the tools, takes calls and sends the
+server instructions. It owns no data.</p>
+<p><strong>The tools</strong> do the work. Each reads a store and returns the envelope
+<code>{status, message, ...}</code>.</p>
+<div class="scroll"><table>
+<tr><th>Part</th><th>What it is in horizon</th><th>Where it lives</th></tr>
+<tr><td>Agent</td><td>The model in the person's own client (Claude Code, Claude Desktop).</td><td>Outside horizon.</td></tr>
+<tr><td>Skill</td><td><code>uvm-requirements</code>, shipped in the Claude Code plugin with the <code>/mcp</code> address and the <code>hzp_</code> token prompt.</td>
+  <td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/skills/uvm-requirements/SKILL.md">plugin/skills/uvm-requirements/SKILL.md</a>;
+  plugin in <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/plugin/">plugin/</a>, marketplace <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/.claude-plugin/marketplace.json">.claude-plugin/marketplace.json</a></td></tr>
+<tr><td>MCP server</td><td>The app's <code>/mcp</code> route, its endpoint and connector, and the shared frame. <code>buildServer</code> makes one <code>McpServer</code> per request and speaks both protocol eras: 2026-07-28 through the SDK's <code>createMcpHandler</code>, 2025 through a plain-JSON stateless leg. It also sends the server instructions (which tool answers which question, what each status means).</td>
+  <td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/routes/mcp/+server.ts">routes/mcp/+server.ts</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/endpoint.ts">app/endpoint.ts</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/connector.ts">app/connector.ts</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/server.ts">server.ts</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/instructions.ts">instructions.ts</a></td></tr>
+<tr><td>Tools</td><td>The list is <code>APP_TOOLS</code>. They live in <code>published/</code> (public data, plain Node, also served by the headless host) and <code>account/</code> (reads account data, app only).</td>
+  <td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/registry.ts">app/registry.ts</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/frontend/src/lib/server/tools/published/">tools/published/</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/frontend/src/lib/server/tools/account/">tools/account/</a>,
+  <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/host.ts">tools/host.ts</a></td></tr>
+</table></div>
+
+<h2 id="diagram">3. The picture</h2>
+<figure>
+<svg viewBox="0 0 1060 560" role="img" aria-labelledby="flow-title flow-desc">
+  <title id="flow-title">One question from the person's client to the stores and back</title>
+  <desc id="flow-desc">Top to bottom. The person's client holds the agent, the skill and the plugin
+    config with the token. It posts to the /mcp route, which holds the guard, the endpoint, the
+    connector and server.ts. That calls callTool in app/registry.ts, which splits two ways: published
+    stores, read as the Low pool with Postgres role mcp and given a PublicCtx with no person, and
+    account stores, read in the app's database in a read-only transaction as the account, with
+    deferred work finishing after the transaction. The reply envelope returns up the same path.</desc>
+  <defs>
+    <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+  <rect x="10" y="10" width="1040" height="96" rx="10" class="d-ext"/>
+  <text x="26" y="34" class="d-title">The person's client</text>
+  <text x="26" y="56" class="d-text">The agent (the model) decides which tools to call</text>
+  <text x="26" y="76" class="d-text">The skill (SKILL.md) teaches judgment</text>
+  <text x="26" y="96" class="d-text">Plugin config: the /mcp address and the hzp_ token</text>
+  <path d="M400 108 L400 142" class="d-arrow" marker-end="url(#ah3)"/>
+  <text x="414" y="130" class="d-sub">POST /mcp, Authorization: Bearer hzp_...</text>
+  <path d="M760 142 L760 108" class="d-arrow" marker-end="url(#ah3)"/>
+  <text x="774" y="130" class="d-sub">reply envelope {status, message, ...}</text>
+  <rect x="10" y="144" width="1040" height="96" rx="10" class="d-box"/>
+  <text x="26" y="168" class="d-title">/mcp in the app</text>
+  <text x="26" y="190" class="d-text">Guard requireAgentToken: token to Actor, or 401</text>
+  <text x="26" y="210" class="d-text">endpoint.ts: in-flight slot, body size, bucket charge</text>
+  <text x="26" y="230" class="d-text">connector.ts and server.ts: pick the protocol era, one McpServer per request</text>
+  <path d="M530 242 L530 274" class="d-arrow" marker-end="url(#ah3)"/>
+  <rect x="330" y="276" width="400" height="52" rx="8" class="d-box"/>
+  <text x="346" y="298" class="d-title">callTool(name, input, ctx)</text>
+  <text x="346" y="316" class="d-sub">app/registry.ts, ctx = {actor, db, corpus, via: 'assistant'}</text>
+  <path d="M430 330 L270 372" class="d-arrow" marker-end="url(#ah3)"/>
+  <path d="M630 330 L790 372" class="d-arrow" marker-end="url(#ah3)"/>
+  <rect x="10" y="374" width="520" height="150" rx="10" class="d-low"/>
+  <text x="26" y="398" class="d-title">Published stores</text>
+  <text x="26" y="420" class="d-text">Low pool, Postgres role mcp, dbt marts</text>
+  <text x="26" y="440" class="d-text">The tool gets a PublicCtx: it carries no person</text>
+  <text x="26" y="460" class="d-sub">The actor's id only charges the rate bucket</text>
+  <text x="26" y="480" class="d-sub">Requirements, funder texts, call verdicts</text>
+  <text x="26" y="500" class="d-sub">tools/published/</text>
+  <rect x="550" y="374" width="500" height="150" rx="10" class="d-mod"/>
+  <text x="566" y="398" class="d-title">Account stores</text>
+  <text x="566" y="420" class="d-text">The app's database, READ ONLY transaction</text>
+  <text x="566" y="440" class="d-text">Read as the account; access rules in the queries</text>
+  <text x="566" y="460" class="d-sub">Work that waits on Microsoft Graph, or writes,</text>
+  <text x="566" y="480" class="d-sub">is a Deferred that finishes after the transaction</text>
+  <text x="566" y="500" class="d-sub">tools/account/</text>
+  <text x="10" y="548" class="d-sub">Both branches return the same envelope, and it travels back up the same path.</text>
+</svg>
+<figcaption>One call, top to bottom. The seam between the two lower boxes is the tier boundary.
+The published side never learns who asks.</figcaption>
+</figure>
+
+<h2 id="request">4. One request, step by step</h2>
+<ol class="calls">
+  <li>The client sends <code>POST /mcp</code> with <code>Authorization: Bearer hzp_...</code>.</li>
+  <li>The guard <code>requireAgentToken</code> (<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/guards.ts">guards.ts</a>) turns the token
+    into an Actor, or answers 401 with <code>WWW-Authenticate</code>.</li>
+  <li><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/endpoint.ts">endpoint.ts</a> takes one of the account's in-flight slots,
+    checks the body size and charges the account's bucket by the tool's cost.</li>
+  <li><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/connector.ts">connector.ts</a> and
+    <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/server.ts">server.ts</a> pick the protocol era.</li>
+  <li><code>callTool(name, input, ctx)</code> runs with <code>ctx = {actor, db, corpus, via: 'assistant'}</code>.</li>
+  <li>Inside <code>callTool</code> the branch is chosen. The doc comment just above
+    <code>export async function callTool</code> in
+    <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/registry.ts">app/registry.ts</a> lists steps 0 to 5.</li>
+  <li>The reply goes back as the envelope.</li>
+</ol>
+
+<h2 id="calls">5. The calls a good agent makes for the budget question</h2>
+<div class="scroll"><table>
+<tr><th>#</th><th>Call</th><th>Path in <code>callTool</code></th><th>What is read, and as whom</th></tr>
+<tr><td>1</td><td><code>proposals_list {}</code></td><td><code>callModerate</code>, then <code>readOnly</code></td>
+  <td>The app's tables, filtered by <code>visibleTo</code>, <code>partyTo</code> and <code>mayUse</code>
+  (<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/account/proposals_list.ts">account/proposals_list.ts</a>). Returns proposal ids and linked calls.</td></tr>
+<tr><td>2</td><td><code>checklist_read {proposal_id}</code></td><td>A variant with a <code>local</code> input, answered in the app as the actor</td>
+  <td>The proposal's checklist, including items of category <code>budget</code>, each with its quote.</td></tr>
+<tr><td>3</td><td><code>documents_search {proposal_id, query: "budget cap allowable costs"}</code></td>
+  <td>Documents tool, two halves (<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/account/documents.ts">account/documents.ts</a>)</td>
+  <td>The funder's texts through the published half; the proposal's uploads read as the account. <code>lanes.published</code> says whether the first half answered.</td></tr>
+<tr><td>4</td><td><code>uvm_requirements_search {query: "F&amp;A rate fringe salary cap"}</code></td><td>Published</td>
+  <td>The Low pool as role <code>mcp</code>. The actor's id only charges the bucket. The tool sees a <code>PublicCtx</code> with no person.</td></tr>
+<tr><td>5</td><td><code>opportunities_eligibility {opportunity_id}</code></td><td>A variant with <code>adds</code></td>
+  <td>The published verdicts first, then the app adds the person block, read as the actor (<code>withAdded</code>).</td></tr>
+<tr><td>6</td><td><code>draft_read {proposal_id, task_id}</code></td><td>Account tool returning a Deferred</td>
+  <td>The budget justification draft, through Microsoft Graph, after the transaction.</td></tr>
+</table></div>
+<div class="note"><p>The tier boundary is the seam between the two kinds of store. The published side never
+learns who asks. The app joins account data onto a published answer in its own process, under the
+account's access rules.</p></div>
+
+<h2 id="platform">6. The second way in</h2>
+<p>The platform's own Ask tabs and pages call the same <code>callTool</code> with
+<code>via: 'platform'</code>: the Ask tab, the drafter, <code>answer/</code> and the pipeline page
+(decision 0023 addendum, item 8, in <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0023-one-tool-layer.md">decisions/0023-one-tool-layer.md</a>).
+Same tools, same checks. The difference is that there the app runs the model itself.</p>
+
+<h2 id="runout">7. Where the flow runs out</h2>
+<p>After step 6 the agent can say what a budget must hold: the funder's caps and forms, UVM's rates
+with their dates, any draft. It cannot build or check one. Budgets exist only as a checklist item
+category (<code>'budget'</code> in <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/db/schema.ts">schema.ts</a>) or an uploaded file.
+There is no <code>get_budget</code>, no <code>get_rates</code> that returns numbers, no
+<code>check_budget</code> and no <code>list_comparable_awards</code>. See
+<a href="problems-and-tools.html#records">records, not passages</a>.</p>
+
+<h2 id="store">8. Moderate is a store, not a tool</h2>
+<p>Decision 0023, item 3, says the tier is a property of the store, not the tool. <code>checklist_read</code>
+is Low with <code>call_id</code> and Moderate with <code>proposal_id</code>. A documents call reads published
+text and staff uploads together. What Moderate protects is on the data side: which Postgres role
+reads (<code>mcp</code> for published stores, <code>web_app</code> with the party rule for account data)
+and what reaches a Low store. Item 4: no account id, role, unit or token digest, held by tests at the store.</p>
+<p>Yet the code still has two tool shapes. Published tools are the <code>Tool</code> type
+(<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/tool.ts">tool.ts</a>: name, title, description, input, output,
+annotations, meta, cost, <code>handler(args, PublicCtx)</code>). Account tools are a <code>Contract</code>
+(<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/account/contract.ts">account/contract.ts</a>: no output, no annotations;
+it adds <code>flag</code>, <code>writes</code>, <code>own</code>, <code>answered</code>). Its handler is wrapped by
+<code>moderate()</code> into a <code>ModerateTool</code> in <code>app/registry.ts</code>.</p>
+<div class="scroll"><table>
+<tr><th>Difference</th><th>Needed?</th><th>Why</th></tr>
+<tr><td>Reads account data, so needs an Actor</td><td>Yes</td><td>But it is a property of the caller and the store.</td></tr>
+<tr><td>READ ONLY transaction</td><td>Yes</td><td>A read tool cannot write by mistake.</td></tr>
+<tr><td>A Deferred after the transaction</td><td>Yes</td><td>Slow or writing work must not hold the transaction.</td></tr>
+<tr><td>Access decided in the handler's queries</td><td>Yes</td><td>The party rule lives where the rows are read.</td></tr>
+<tr><td>Listed only under a switch, <code>flag</code></td><td>Yes</td><td>A tool can ship dark.</td></tr>
+<tr><td>A bare body wrapped with <code>answered</code> vs a finished envelope</td><td>No</td><td>Two conventions for one thing.</td></tr>
+<tr><td>No <code>output</code> or <code>annotations</code> field</td><td>No</td><td>An absence, not a design.</td></tr>
+<tr><td>The <code>AgentTool</code> and <code>runTool</code> adapters for the Ask tab</td><td>No</td><td>History.</td></tr>
+</table></div>
+<p>What really varies is the caller. It is an Actor (a signed-in person), or a service token
+(operator-minted <code>hzn_</code> tokens under <code>svc_*</code> names, which reach published stores only, decision 0023
+item 11), or no one (the headless host, for development and the gate).</p>
+<div class="note"><p><strong>A reading, not a ruling:</strong> one <code>Tool</code> type whose handler gets the
+stores this call may use, with the account store present only when the caller has an Actor, so the refusal
+is structural. This is close to decision 0023's addendum item 6.</p></div>
+
+</main>
+</body>
+</html>

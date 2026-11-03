@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: problems first, then tools</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --ask: #8a6a00; --ask-bg: #f8f0d0;
+    --yes: #2d7a46; --yes-bg: #e3f3e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --ask: #e3c766; --ask-bg: #352e14;
+      --yes: #7fcf98; --yes-bg: #1a3324;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h2.part { font-size: 1.6rem; margin-top: 64px; border-top: 3px solid var(--accent); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.task { min-width: 15em; }
+  td.judge { font-size: 0.9rem; color: var(--muted); min-width: 14em; }
+  td code { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.yes { color: var(--yes); background: var(--yes-bg); }
+  .tag.prop { color: var(--prop); background: var(--prop-bg); }
+  .tag.ask { color: var(--ask); background: var(--ask-bg); }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  ol.calls li { margin: 4px 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 16px 0; }
+  .pair > div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+  .pair h3 { margin: 0 0 6px; }
+  .pair p { margin: 4px 0; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Problems first, then tools</h1>
+<p class="lede">How to decide which tools horizon should have. Start from the questions people at
+UVM bring, find the calls a good assistant would make to answer them, and leave the judgment to the
+model and a skill. Each idea is shown on horizon's own tools.</p>
+<p class="stamp">Written 2026-10-31, revised 2026-11-02 against <code>main</code> at
+<code>4421b2d8</code>, revised again against <code>b1898229</code>. A page for discussion, not a decision. Tags say how far each tool has got:
+<span class="tag yes">served</span>, <span class="tag ask">decided</span> for a tool ruled in a decision but not
+served yet, and <span class="tag prop">proposed</span>. The list of every tool, what it returns and
+which spec features we use is <a href="tools-skills-mcp.html">tools-skills-mcp.html</a>. This page
+says why the tools are shaped as they are.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#ideas"><strong>Part 1. Ideas</strong></a>
+  <a href="#level">1. What a tool returns</a>
+  <a href="#answers">2. An answer, not an inventory</a>
+  <a href="#writes">3. Split writes by who approves them</a>
+  <a href="#records">4. Documents and records</a>
+  <a href="#tasks">5. Strong tasks and weak tasks</a>
+  <a href="#skills">6. Two kinds of skill</a>
+  <a href="#stages"><strong>Part 2. Problems by stage</strong></a>
+  <a href="#discovery">7. Discovery</a>
+  <a href="#preaward">8. Pre-award</a>
+  <a href="#postaward">9. Post-award</a>
+  <a href="#later">10. Outcomes and analytics</a>
+  <a href="#budget">11. Worked example: the budget question</a>
+  <a href="#order">12. The order to build in</a>
+  <a href="#open">Open questions</a>
+</nav>
+
+<h2 id="ideas" class="part">Part 1. Ideas</h2>
+
+<h2 id="level">1. What a tool returns</h2>
+<p>MCP's introductions explain tools with a trip. One assistant reaches three servers and calls
+<code>searchFlights(origin, destination, date)</code>, then <code>createCalendarEvent(...)</code>,
+then <code>sendEmail(...)</code>. The person asked for one outcome, and the assistant chose the
+calls.</p>
+<p>Anthropic's write-up on advanced tool use has an example closer to a university's: "Which team
+members exceeded their Q3 travel budget?" It gives the model three tools:
+<code>get_team_members(department)</code>, <code>get_expenses(user_id, quarter)</code> and
+<code>get_budget_by_level(level)</code>. Three things make them the right size:</p>
+<ul>
+  <li>Each returns domain records, such as a person, an expense line or a limit, in the
+    institution's own terms.</li>
+  <li>They chain by id. The <code>user_id</code> that one returns is what the next one takes.</li>
+  <li>None of them answers the question. The model compares the expenses with the limits.</li>
+</ul>
+<p>horizon follows the first two rules and bends the third on purpose, in two ways.</p>
+<div class="pair">
+  <div>
+    <h3>Arithmetic goes in a tool</h3>
+    <p>A model can get a sum, a cap or a rate base wrong. Decision 0025, item 2 makes
+      <code>budget_compute</code> the one authority for budget arithmetic, so every client gets
+      the same numbers. A skill never carries a script that computes a budget.</p>
+  </div>
+  <div>
+    <h3>Some judgments go in a tool</h3>
+    <p><code>opportunities_eligibility</code> returns a verdict per requirement, and
+      <code>opportunities_match</code> returns a ranking. A model could not make either as well
+      alone, because each needs the whole corpus, a reviewed rule or a benchmarked model. Each
+      verdict carries the quote behind it, and none decides for the person. A ranking is not a
+      recommendation to apply, and a verdict is not SPA's ruling.</p>
+  </div>
+</div>
+<p>Words like "fits", "realistic", "risky" and "ready" stay with the model. A skill says how to reach
+them.</p>
+
+<h2 id="answers">2. An answer, not an inventory</h2>
+<p>Anthropic's <a href="https://www.anthropic.com/engineering/writing-tools-for-agents">Writing
+tools for agents</a> warns against tools that hand a model everything to filter or join. Its
+examples replace <code>list_users</code>, <code>list_events</code> and <code>create_event</code>
+with one <code>schedule_event</code>, <code>read_logs</code> with <code>search_logs</code>, and
+three customer lookups with one <code>get_customer_context</code>. A tool named <code>_list</code> is
+not the problem. A tool that returns an inventory where the person wanted an answer is the problem,
+and so is a chain of calls the server could have made in one.</p>
+<p>horizon has both kinds:</p>
+<ul>
+  <li><code>checklist_read</code> with a <code>proposal_id</code> returns tasks, status, the
+    sponsor's quotes, required documents and eligibility in one reply. That is the
+    <code>get_customer_context</code> shape.</li>
+  <li><code>draft_read</code>'s outline lists <code>open_findings</code> and
+    <code>changed_since_check</code>, so the model knows where to look first. That is the
+    <code>search_logs</code> idea.</li>
+  <li>"Where does my proposal stand?" takes five calls today. The proposed
+    <code>proposals_read</code> answers it in one.</li>
+  <li><code>documents_list</code> returned up to ten years of synopses for a call. !227 trimmed it.
+    The open question is whether search should come before list.</li>
+</ul>
+<p>The verdict on each tool is in <a href="tools-skills-mcp.html#t-lists">tools-skills-mcp.html</a>.</p>
+
+<h2 id="writes">3. Split writes by who approves them</h2>
+<p>Fewer tools are easier for a model to choose between. <code>draft_edit</code> takes an
+<code>action</code> instead of being three tools, and <code>draft_read</code> with no section returns
+the outline. Anthropic's tool guidance does the same with pull requests, using one tool with an
+<code>action</code> instead of <code>create_pr</code>, <code>review_pr</code> and
+<code>merge_pr</code>.</p>
+<p>Writes are the exception. A client approves and annotates a tool, not an action, so a write tool
+should group only the actions a person would approve the same way. Editing your own draft, sending
+SPA a routine request and submitting a proposal are three tools for that reason. A person who always
+allows the routine request has not allowed a submission. The proposed write tools
+(<code>proposals_edit</code>, <code>proposals_route</code>, <code>proposals_submit</code>,
+<code>checklist_edit</code>) follow this rule, and each needs an addendum to decision 0006 before
+anyone writes its code.</p>
+
+<h2 id="records">4. Documents and records</h2>
+<div class="pair">
+  <div>
+    <h3>Document-shaped</h3>
+    <p>These are the requirements and documents tool families. A model searches a corpus, reads a passage and quotes
+      it with its date and source. These tools answer "what does the rule say?" Most of what horizon
+      serves is this kind.</p>
+  </div>
+  <div>
+    <h3>Record-shaped</h3>
+    <p>These are entities with ids and numbers that a model can join and compare, such as proposals,
+      checklist items, eligibility verdicts and, from decisions 0024 and 0025, facts and budgets.
+      These tools answer "is this budget realistic?", which no passage search answers, however good it gets.</p>
+  </div>
+</div>
+<p>Decision 0024 turns a document into records where that matters. A fact such as UVM's fringe
+rate or a funder's salary cap becomes a value with the sentence it rests on, its source, its dates
+and whether SPA has confirmed it. The sentence keeps what made the document tools trustworthy. The
+value makes it something a tool can compute with.</p>
+<p>A record tool raises its own question, whether to merge parts or split them. Without code mode, every call is a
+round trip through the model, so merging parts that are always used together saves calls, such as one
+<code>awards_read</code> that carries the award's terms. With code mode, small tools chain at low cost in
+a sandbox and large results never reach the model. the rule this page proposes is to merge parts that are
+always used together and are small, and to split parts that are used selectively or can get large.
+Spending transactions are the second kind.</p>
+
+<h2 id="tasks">5. Strong tasks and weak tasks</h2>
+<p>Anthropic separates strong evaluation tasks from weak ones. A strong task states an outcome,
+takes several calls and leaves room for judgment: "Customer 9182 was charged three times. Find the
+log entries and whether other customers were affected." A weak task is one call: "Search the payment
+logs for <code>customer_id=9182</code>."</p>
+<div class="pair">
+  <div>
+    <h3>Strong tasks decide the tools</h3>
+    <p>A tool earns its place when a strong task needs it. Strong tasks are also what an agent-level
+      benchmark keys and grades (<a href="evaluation.html#agent">evaluation.html</a>).</p>
+  </div>
+  <div>
+    <h3>Weak tasks are a tool's own tests</h3>
+    <p>"Get the call with id X" has one right answer, so it gets a deterministic test. The house
+      rule says the same. Ranking and judging tools get a keyed benchmark, and lookup tools get a
+      test.</p>
+  </div>
+</div>
+
+<h2 id="skills">6. Two kinds of skill</h2>
+<p>Anthropic's guide to building skills names two starting points.</p>
+<div class="pair">
+  <div>
+    <h3>Tool-first</h3>
+    <p>The person already has the tools, and the skill teaches how to read what they return.
+      <code>uvm-requirements</code>, the one skill the plugin ships, is this kind. It teaches quoting
+      the revision date, telling UVM's half from the funder's, and saying "my results don't have it"
+      instead of "UVM has no rule".</p>
+  </div>
+  <div>
+    <h3>Problem-first</h3>
+    <p>The person describes an outcome, and the skill makes the calls in order and says how to reach
+      the judgment. Decision 0025 planned the first, <code>budget-build</code>, and it shipped in the same
+      branch as <code>budget_compute</code> (!238). The others are candidates
+      (<a href="tools-skills-mcp.html#s-next">tools-skills-mcp.html</a>).</p>
+  </div>
+</div>
+<p>Every client sees a tool's description and, nearly every client, the server's instructions. Only
+some clients load skills. So a sentence an outside user's assistant cannot do without goes in the
+instructions or a description, and a sentence that makes a good answer better goes in a skill.</p>
+<p>The MCP specification adds a third place. A server can serve <em>prompts</em>, which are workflows a
+person starts by picking them as slash commands. A problem-first workflow is something a person
+asks for, so it fits a prompt better than a skill the model has to decide to load. A prompt
+reaches every client that supports prompts without a plugin. Tool-first knowledge stays a skill.
+The split, on the draft check, is in
+<a href="tools-skills-mcp.html#s-boundary">tools-skills-mcp.html</a>.
+<span class="tag prop">proposed</span></p>
+
+<h2 id="stages" class="part">Part 2. Problems by stage</h2>
+<p class="claim">Each stage lists the strong tasks people bring, the tools each task would call and the
+judgment left to the model. The tasks are a first guess. We still have to check them with SPA and
+the research administrators.</p>
+
+<h2 id="discovery">7. Discovery: funding and collaborators</h2>
+<div class="scroll"><table>
+  <tr><th>Strong task</th><th>Tools it calls</th><th>Judgment left to the model</th></tr>
+  <tr>
+    <td class="task">"I'm starting work on X. Which open calls in the next four months fit my lab, and
+      can I apply to the best three?"</td>
+    <td><span class="tag yes">served</span> <code>opportunities_match</code>, with <code>mine</code>
+      or the work as text, returns calls ranked by fit with the passage matched<br>
+      <span class="tag yes">served</span> <code>opportunities_eligibility</code> for each top call<br>
+      <span class="tag prop">proposed</span> <code>opportunities_read</code>, which returns the call as a record, with
+      dates and award ceiling</td>
+    <td class="judge">Which calls fit. A ranking is fit, never eligibility. Unknown is not
+      no.</td>
+  </tr>
+  <tr>
+    <td class="task">"Which open calls fit our institute's three themes, and which PIs should lead
+      each?" (a PI who thinks at the institute's level), or "Find calls for Dr. X and for the three
+      PIs in this group" (RD staff, for the people they support)</td>
+    <td><span class="tag yes">served</span> <code>opportunities_match</code> with the group's text or
+      each member's papers<br>
+      <span class="tag prop">proposed</span> a match for named researchers or a unit, which reads
+      their profiles, and a rule on who may ask for whom</td>
+    <td class="judge">Which theme a call serves, and who is best placed to lead it. Whether a call
+      fits one member or needs the group.</td>
+  </tr>
+  <tr>
+    <td class="task">"Who at UVM has won from this program before, and who in engineering has
+      published near my aims?"</td>
+    <td><span class="tag prop">proposed</span> <code>awards_read</code> over public award data,
+      filtered by sponsor program<br>
+      <span class="tag prop">proposed</span> a researcher search over the pipeline's
+      <code>researchers</code> domain. No tool exists, and the app's Researchers page is for staff.</td>
+    <td class="judge">Whose work is close enough. Whether the team meets the call's rule on
+      composition.</td>
+  </tr>
+</table></div>
+<p><span class="tag low">Low</span> These tools use public calls, public works and public award records, so they
+reach an outside user's assistant with no account.</p>
+
+<h2 id="preaward">8. Pre-award: deciding to apply and building the proposal</h2>
+<div class="scroll"><table>
+  <tr><th>Strong task</th><th>Tools it calls</th><th>Judgment left to the model</th></tr>
+  <tr>
+    <td class="task">"Can I apply to this R01, and what does SPA need from me if it's due in three
+      weeks?"</td>
+    <td><span class="tag yes">served</span> <code>opportunities_eligibility</code>,
+      <code>checklist_read</code> (<code>call_id</code>), <code>documents_search</code> for the
+      funder's half, <code>uvm_requirements_search</code> for UVM's half</td>
+    <td class="judge">Keeping the two halves apart and saying which is which. What three weeks still
+      allows.</td>
+  </tr>
+  <tr>
+    <td class="task">"Is this proposal's budget unrealistic given its narrative and the
+      solicitation?"</td>
+    <td>See <a href="#budget">the worked example</a>.</td>
+    <td class="judge">Effort against who owns which aim. Cost lines against the narrative's
+      activities. Size against funded peers.</td>
+  </tr>
+  <tr>
+    <td class="task">"Does our narrative cover everything the call asks for, and what is still
+      missing before routing?"</td>
+    <td><span class="tag yes">served</span> <code>proposals_list</code>, <code>checklist_read</code>
+      (<code>proposal_id</code>), <code>draft_read</code>, <code>documents_read</code> by
+      <code>item_id</code> for the sponsor's words<br>
+      <span class="tag prop">proposed</span> <code>proposals_read</code> for the proposal's state in
+      one call</td>
+    <td class="judge">Whether a section that exists meets the item. A heading is not a requirement
+      met.</td>
+  </tr>
+</table></div>
+<p><span class="tag low">Low</span> applies to the call, its documents and UVM's rules.
+<span class="tag mod">account</span> applies to anything about a proposal, which belongs to its team.</p>
+
+<h2 id="postaward">9. Post-award: spending, compliance and closeout</h2>
+<p>This stage is closest to the Q3 travel-budget example. It compares records and numbers against
+limits and dates.</p>
+<div class="scroll"><table>
+  <tr><th>Strong task</th><th>Tools it calls</th><th>Judgment left to the model</th></tr>
+  <tr>
+    <td class="task">"Which of my awards end in the next 90 days with more than 30% unspent, and which
+      need a no-cost extension request now?"</td>
+    <td><span class="tag prop">proposed</span> <code>awards_read</code> for the PI's active awards, then
+      for one award with its period, budget lines and terms<br>
+      <span class="tag yes">served</span> <code>uvm_requirements_search</code> for SPA's no-cost
+      extension procedure</td>
+    <td class="judge">Which balances are a problem and which are expected, for example committed but
+      not yet charged.</td>
+  </tr>
+  <tr>
+    <td class="task">"Which awards in my department are spending faster than their period has
+      elapsed?"</td>
+    <td><span class="tag prop">proposed</span> <code>awards_read</code> by unit, with each line's
+      encumbrance, expenditure and projected amount</td>
+    <td class="judge">How fast is too fast for a given kind of award.</td>
+  </tr>
+</table></div>
+<p><span class="tag ask">tier to rule</span> UVM's award and spending records come from its own
+systems, and no one has arranged access to them. Decision 0025's budget shape leaves room for the award
+columns (encumbrance, expenditure, projected) so one shape serves a proposal and an award.</p>
+
+<h2 id="later">10. Later: outcomes, commercialization and analytics</h2>
+<ul>
+  <li><strong>Outcomes and inventions.</strong> "Which awards produced papers but no invention
+    disclosure, in areas where UVM Innovations has licensed before?" These need the
+    <code>outcomes</code> and <code>inventions</code> domains that AGENTS.md lists for later.</li>
+  <li><strong>Analytics.</strong> These are for offices and deans. "NIH submissions from my college dropped
+    this year. Where, and why?" These cross domains, so they are dbt marts behind one or two query
+    tools rather than new record tools.</li>
+</ul>
+
+<h2 id="budget">11. Worked example: the budget question</h2>
+<p>"Is this proposal's budget unrealistic given its narrative and the program solicitation?" A first
+draft of this page answered it with six calls: read the proposal, read its budget, read the call's
+limits, look up the rates, run the checks, compare with funded awards. Decision 0025 settles it
+differently, as the list below shows.</p>
+<ol class="calls">
+  <li><span class="tag prop">proposed</span> <code>budget_compare</code>
+    (<span class="tag mod">account</span>, 0025 addendum A4) takes the <code>proposal_id</code>. It
+    reads the team's workbook and the Summary Proposal Budget through the documents tools' proposal
+    half. It uses readers of their known layouts, not a model. It reports where they disagree
+    with each other, with the call's limits and with the justification.</li>
+  <li><span class="tag yes">served</span> <code>budget_compute</code>
+    (<span class="tag low">Low</span>, 0025 item 5) takes a budget in the <code>budget-1</code> shape,
+    and may take the <code>call_id</code>, which reports the call's limits by name (addendum C1). It checks none of them yet. It looks up
+    UVM's and the funder's rates itself, in <code>funding.facts</code>, and returns the totals per
+    period and a <code>checks</code> block, each check naming the fact it rests on.</li>
+  <li><span class="tag yes">served</span> <code>draft_read</code> for the narrative's aims and
+    activities.</li>
+</ol>
+<div class="note">
+  <p><strong>Why the rates are not a separate step.</strong> In the first draft the model called a
+    rate tool and passed the numbers into the calculator. Decision 0025, item 4 forbids that: "a
+    model never passes a rate in, so a budget question is one call, not <code>facts_read</code> then
+    <code>budget_compute</code> with numbers copied between them." A model makes mistakes when it
+    copies a number between calls. <code>facts_read</code> stays for questions about a rate itself.</p>
+  <p><strong>Where the judgment stays.</strong> Does 10% effort fit a PI who owns three of four aims?
+    The narrative describes fieldwork, so why is there no travel line? The checks find what breaks a
+    rule. The <code>budget-build</code> skill and the model judge what is unusual, and say which
+    findings are rules and which are opinions.</p>
+</div>
+<p>The engine, built and tested in
+<code>frontend/src/lib/tools/budget/</code> (!237), and the tool <code>budget_compute</code> (!238)
+are served, with the <code>budget-build</code> skill shipped beside them. The figures and
+reference tables are on <a href="budgets.html">budgets.html</a>.</p>
+
+<h2 id="order">12. The order to build in</h2>
+<p>Four questions score each strong task:</p>
+<ol>
+  <li><strong>Is the data in hand, and is it Low?</strong> Public data needs no account and reaches
+    outside users on their own assistants.</li>
+  <li><strong>Can the answer be keyed?</strong> A judgment that cannot be graded cannot be
+    improved.</li>
+  <li><strong>Does someone at UVM ask it every week?</strong> Ask SPA and the research
+    administrators. Usage of the unlaunched site is not evidence.</li>
+  <li><strong>Does it reuse tools other stages need?</strong> <code>facts_read</code> serves every
+    stage that touches a rate or an identifier. A spending feed serves post-award only.</li>
+</ol>
+<div class="scroll"><table>
+  <tr><th>Stage</th><th>Where it stands</th></tr>
+  <tr><td>Discovery and the pre-award halves</td><td>Served: match, eligibility, checklist, the
+    documents and UVM's rules. Proposed: <code>opportunities_read</code> and one name for a call's
+    id.</td></tr>
+  <tr><td>Budgets</td><td>Ruled next, ahead of the other proposal work, in decisions 0024 and 0025.
+    Served: <code>budget_compute</code> and <code>budget-build</code>. Next:
+    <code>budget_compare</code>.</td></tr>
+  <tr><td>The rest of a proposal</td><td><code>proposals_read</code> and the write tools each
+    wait on their own addendum to decision 0006 (!185).</td></tr>
+  <tr><td>Post-award</td><td>It needs UVM's award records and a tier ruling. It can start on public award
+    data.</td></tr>
+  <tr><td>Outcomes and analytics</td><td>It builds on the records of the earlier stages.</td></tr>
+</table></div>
+
+<h2 id="open">Open questions</h2>
+<ul>
+  <li>Which three strong tasks per stage do SPA and the research administrators bring? The tasks
+    above are a first guess.</li>
+  <li>Is a researcher search a tool for anyone, or staff-only like the app's Researchers page?</li>
+  <li>What access is there to post-award records, and at which tier?</li>
+  <li>Should funded-peer comparisons come from public award data only, or from UVM's own history
+    too?</li>
+</ul>
+
+</main>
+</body>
+</html>

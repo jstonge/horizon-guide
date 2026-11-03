@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: tools, skills, MCP</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --code-bg: #eef1f5; --prop: #8a4b9e; --prop-bg: #f3e8f6; --yes: #2d7a46; --yes-bg: #e3f3e8;
+    --ask: #8a6a00; --ask-bg: #f8f0d0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --code-bg: #232833; --prop: #d39be4; --prop-bg: #33213b; --yes: #7fcf98; --yes-bg: #1a3324;
+      --ask: #e3c766; --ask-bg: #352e14;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h2.part { font-size: 1.6rem; margin-top: 64px; border-top: 3px solid var(--accent); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  pre { font: 0.85em/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 10px 14px; border-radius: 6px; overflow-x: auto; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.93rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.name { white-space: nowrap; font-weight: 600; }
+  td.small { font-size: 0.88rem; color: var(--muted); }
+  tr.next td { border-bottom-style: dashed; }
+  tr.next td.name { color: var(--prop); }
+  .src { display: block; font-size: 0.8rem; font-weight: 400; color: var(--muted); white-space: normal; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .tag.prop { color: var(--prop); background: var(--prop-bg); }
+  .tag.yes { color: var(--yes); background: var(--yes-bg); }
+  .tag.ask { color: var(--ask); background: var(--ask-bg); }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin: 16px 0; }
+  .pair > div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+  .pair h3 { margin: 0 0 6px; }
+  .pair p, .pair li { margin: 4px 0; font-size: 0.95rem; }
+  figure { margin: 24px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; max-width: 80ch; }
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-acc { fill: var(--low-bg); stroke: var(--low); stroke-width: 1.3; }
+  .d-mod { fill: var(--mod-bg); stroke: var(--mod); stroke-width: 1.3; }
+  .d-title { fill: var(--fg); font: 600 13px system-ui, sans-serif; }
+  .d-text { fill: var(--fg); font: 12px ui-monospace, Menlo, monospace; }
+  .d-sub { fill: var(--muted); font: 11.5px system-ui, sans-serif; }
+  .d-group { fill: var(--muted); font: 600 11px system-ui, sans-serif; letter-spacing: 0.08em; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .d-head { fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Tools, skills, MCP</h1>
+<p class="lede">What a person's assistant can do with horizon today, in three layers. Tools look
+things up, read texts and write drafts. Skills give the order to call the tools in and say how to
+judge what they return. MCP is the protocol any assistant uses to reach the tools.</p>
+<p class="stamp">Written 2026-11-01, revised 2026-11-02 against <code>main</code> at
+<code>4421b2d8</code>, revised again 2026-11-02 against <code>main</code> at <code>b1898229</code> (!238 serves <code>budget_compute</code>), after both steps of decision 0023's addendum of 2026-11-01. The tool
+descriptions here quote or condense <code>frontend/tests/snapshots/agent-tools.json</code>. Rows marked
+<span class="tag ask">decided</span> are ruled in a decision and not served yet; rows marked
+<span class="tag prop">proposed</span> are not ruled. This page is the inventory. Why the tools are
+shaped as they are, and which to build next, is on
+<a href="problems-and-tools.html">problems-and-tools.html</a>. What every tool inherits is on
+<a href="proposed-capabilities.html">proposed-capabilities.html</a>.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#frame">How to read this page</a>
+  <a href="#tools"><strong>Part 1. Tools</strong></a>
+  <a href="#t-req">1.1 UVM's own rules</a>
+  <a href="#t-call">1.2 Funding opportunities</a>
+  <a href="#t-docs">1.3 A call's documents and the funder's guides</a>
+  <a href="#t-prop">1.4 A proposal and its drafts</a>
+  <a href="#t-budget">1.5 Budgets and facts</a>
+  <a href="#t-awards">1.6 Awards (proposed)</a>
+  <a href="#t-chain">1.7 How the tools chain</a>
+  <a href="#t-lists">1.8 Each tool against "an answer, not an inventory"</a>
+  <a href="#skills"><strong>Part 2. Skills</strong></a>
+  <a href="#s-now">2.1 What we ship today</a>
+  <a href="#s-next">2.2 Workflows our tools could carry (proposed)</a>
+  <a href="#s-where">2.3 What goes where</a>
+  <a href="#mcp"><strong>Part 3. MCP</strong></a>
+  <a href="#m-path">3.1 One request's path</a>
+  <a href="#m-spec">3.2 What we use of the spec</a>
+  <a href="#m-not">3.3 What we do not use yet</a>
+  <a href="#m-code">3.4 Where it lives in the code</a>
+  <a href="#open">Open questions</a>
+</nav>
+
+<h2 id="frame">How to read this page</h2>
+<p>Part 1 lists the tools by family: what each returns, an example call, and what a signed-in person
+gets beyond a service. Part 2 lists the skills we ship and the ones our tools could carry. Part 3 says
+how a request reaches the tools and which parts of the MCP specification we use.</p>
+<p>A question such as "Can my lab apply to this call, and what must we hand in?" takes tools from
+several families. The model chains them by the ids each returns (<a href="#t-chain">1.7</a>). The
+ideas behind the families (records with ids, answers rather than inventories, writes split by who
+approves them) are on <a href="problems-and-tools.html#ideas">problems-and-tools.html</a>.</p>
+
+<!-- ============================================================ PART 1 -->
+<h2 id="tools" class="part">Part 1. Tools</h2>
+<p class="claim">horizon serves fifteen tools in five families. Each family answers one kind of question.
+Which family to use depends on whose words hold the answer, UVM's, a funder's or the team's. One
+more family, awards, is proposed.</p>
+
+<div class="scroll"><table>
+  <tr><th>Family</th><th>The question in a person's words</th><th>Tools</th><th>Who can call them</th></tr>
+  <tr><td>UVM's own rules</td><td>"What does SPA need from me for a no-cost extension?"</td>
+    <td>4</td><td><span class="tag low">Low</span> anyone, services too</td></tr>
+  <tr><td>Funding opportunities</td><td>"Which calls fit my work, can UVM apply, and what must the application hold?"</td>
+    <td>3</td><td><span class="tag low">Low</span> anyone; a person also gets their own half</td></tr>
+  <tr><td>A call's documents and the funder's guides</td><td>"What does the solicitation say about the page limit?"</td>
+    <td>3</td><td><span class="tag low">Low</span> texts; a person also gets uploads and proposal scope</td></tr>
+  <tr><td>A proposal and its drafts</td><td>"Does our narrative cover everything the call asks for?"</td>
+    <td>4</td><td><span class="tag mod">account</span> a signed-in person who is a party to the proposal</td></tr>
+  <tr><td>Budgets and facts <span class="tag yes">served</span></td><td>"Do this budget's totals and rates hold up, and does it match the proposal's other budget documents?"</td>
+    <td>1 served (<code>budget_compute</code>), 1 decided (<code>facts_read</code>), 1 proposed (<code>budget_compare</code>)</td><td><span class="tag low">Low</span> <code>budget_compute</code> and <code>facts_read</code>, services too; <span class="tag mod">account</span> <code>budget_compare</code></td></tr>
+  <tr class="next"><td>Awards <span class="tag prop">proposed</span></td><td>"Which of my awards end soon with money unspent?"</td>
+    <td>0</td><td>Public award data, and UVM's own records at a tier still to rule</td></tr>
+</table></div>
+<p>A service token's <code>tools/list</code> holds the eight tools of the first two families and the budget family: the four <code>uvm_requirements_*</code> tools, <code>opportunities_eligibility</code>, <code>opportunities_match</code>, <code>checklist_read</code> and <code>budget_compute</code>. A
+signed-in person sees all of them. Two are behind switches: <code>draft_edit</code> (draft writes) and
+<code>critiques_list</code> (the reviewers' text).</p>
+<p>Each family's table ends with the tools we might build next, marked <span class="tag prop">proposed</span> with a dashed
+line, and says where each comes from: decision 0006's proposed addendum (!185), the
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/findings/2026-10-30-tool-parity/README.md">tool-parity audit</a> of the app's pages, or
+the strong tasks on <a href="problems-and-tools.html">problems-and-tools.html</a>. Before it is
+built, a candidate states whether it reads or writes, whether it needs an account, and what the owner
+has to rule on. A write does what the app's page already does, as the same person, and no more, and
+leaves a row the team sees (!185).</p>
+<p>The proposed tools follow two rules from
+<a href="problems-and-tools.html#writes">problems-and-tools.html</a>. A read returns one record when
+given an id and a filtered list when not. A write groups the actions a person would approve the same
+way. The audit and !185 name one candidate per action on a page; the names below are this page's,
+not theirs.</p>
+
+<h2 id="t-req">1.1 UVM's own rules</h2>
+<p>These tools hold UVM's published procedures and policy from 22 offices, which horizon converts from
+www.uvm.edu. A model searches them first, then reads a section.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>Example call</th></tr>
+  <tr><td class="name">uvm_requirements_search</td><td>The best-matching documents, with the top three whole
+    and the rest as a short snippet each. Every result has its source URL and the revision date UVM
+    printed on it.</td><td><code>{"query": "cost transfer deadline"}</code></td></tr>
+  <tr><td class="name">uvm_requirements_read</td><td>One section by id, or a whole document (cut at
+    20,000 characters).</td><td><code>{"unit": "spa", "document": "cost-transfers", "section": "deadline"}</code></td></tr>
+  <tr><td class="name">uvm_requirements_outline</td><td>A document's section headings and sizes.</td>
+    <td><code>{"unit": "spa", "document": "cost-transfers"}</code></td></tr>
+  <tr><td class="name">uvm_requirements_units</td><td>The offices held and how many documents each has.</td>
+    <td><code>{}</code></td></tr>
+</table></div>
+<p>UVM's rates and identifiers as values, rather than passages, are <code>facts_read</code>
+(<a href="#t-budget">1.5</a>).</p>
+
+<h2 id="t-call">1.2 Funding opportunities</h2>
+<p>These tools answer two kinds of question. Which open calls fit some work, across all the calls
+held? And for one call, may UVM apply and what must an application hold? Unlike the Anthropic tools, they return judgments, such as a ranking, an
+eligibility verdict or a drafted checklist. Each is a judgment the model could not make as well on
+its own, because it needs the whole corpus, a reviewed rule or a benchmarked draft. Each comes with
+the quote or passage behind it, and none answers the person's question for them. A ranking is not a
+recommendation to apply, and a verdict is not SPA's ruling.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>What a signed-in person adds</th><th>Example call</th></tr>
+  <tr><td class="name">opportunities_match</td><td>Open calls ranked by how well their scope fits a
+    piece of work (text, OpenAlex works or papers), each with the passage it matched on.</td>
+    <td><code>mine: true</code> returns the calls already ranked for the person's own papers and interests.</td>
+    <td><code>{"text": "methane flux in peat wetlands", "limit": 5}</code></td></tr>
+  <tr><td class="name">opportunities_eligibility</td><td>What the call says about who may apply, and
+    whether UVM as an institution meets it (met, unmet or unknown), each requirement with its quote.</td>
+    <td>A <code>person</code> block judges the person against funder rules on career stage,
+    citizenship and appointment, from the profile they keep.</td>
+    <td><code>{"opportunity_id": "363479"}</code></td></tr>
+  <tr><td class="name">checklist_read</td><td>What an application must hold, which horizon drafts once from the
+    call's documents and UVM's rules. Each item quotes its source.</td>
+    <td><code>proposal_id</code> returns the proposal's checklist as its team sees it, with task status.</td>
+    <td><code>{"call_id": "363479"}</code></td></tr>
+  <tr class="next"><td class="name">opportunities_read <span class="tag prop">proposed</span><span class="src">audit, rows 1 and 3</span></td>
+    <td>With an id, the call as a record: sponsor, program, dates, award ceiling and floor, status.
+    Those facts sit inside <code>documents_list</code>'s <code>calls</code> block today. Without an
+    id, open calls filtered by sponsor and close date, with no ranking. Ranking by fit stays in
+    <code>opportunities_match</code>. It is a Low-tier read.</td>
+    <td>The person's saved calls</td>
+    <td><code>{"opportunity_id": "363479"}</code><br><code>{"sponsor": "NSF", "closes_before": "2027-03-01"}</code></td></tr>
+</table></div>
+<div class="note"><p><strong>Who a match is for.</strong> <code>opportunities_match</code> ranks calls for
+  whatever describes the work, so its subject is wider than one PI. Today a text, a list of papers or
+  the caller's own interests (<code>mine</code>) can stand for a lab, a group of PIs or an institute.
+  To do that, pass the group's abstracts, or the papers of each member. Two subjects are missing. RD staff
+  matching for a PI they support, and a unit or institute matching by its people, would need an input
+  that names the researchers or the unit, and a rule saying who may match for whom.
+  This is <span class="tag prop">proposed</span>, and it needs a ruling first, because it reads other people's
+  profiles.</p></div>
+<div class="note"><p><strong>One thing to fix in how we name it.</strong> The same call is
+  <code>opportunity_id</code> in <code>opportunities_eligibility</code> and <code>call_id</code> in
+  <code>checklist_read</code> and the documents tools. Our own instructions call it "a funding call".
+  A model can work out that they are the same, but a person reading the tool list sees two kinds of
+id. <code>opportunities_read</code> would settle it. The id it takes becomes the one name for a call
+that the other tools use.</p></div>
+
+<h2 id="t-docs">1.3 A call's documents and the funder's guides</h2>
+<p>These tools cover everything held for a call: its solicitation, amendments and FAQ, its other years, the funder
+guides it inherits, such as NSF's PAPPG and NIH's How to Apply, and what staff uploaded to it. horizon
+crawls the funder's texts. It does not wait for someone to upload them, and decision 0014 sections each
+guide by its PDF's own bookmarks. A model lists what is held, searches it, then reads a passage by its
+key.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>What a signed-in person adds</th><th>Example call</th></tr>
+  <tr><td class="name">documents_list</td><td>The texts held for a call or a guide, with their
+    keys, types and sizes, and for a call each year's dates, ceiling and eligibility text.</td>
+    <td>Staff uploads, listed apart, and <code>proposal_id</code> scope.</td>
+    <td><code>{"call_id": "363479"}</code></td></tr>
+  <tr><td class="name">documents_search</td><td>Matching passages, best first, each with its key.</td>
+    <td>Upload passages, ranked on their own.</td>
+    <td><code>{"call_id": "363479", "query": "page limit project narrative"}</code></td></tr>
+  <tr><td class="name">documents_read</td><td>One passage by key, and what follows it, up to 12,000
+    characters a reply.</td><td><code>item_id</code> returns the passage a checklist item's quote came from,
+    with the quote marked.</td>
+    <td><code>{"proposal_id": "p1", "item_id": "t1"}</code></td></tr>
+</table></div>
+
+<h3>Who wrote it, and what it attaches to</h3>
+<p>A call's scope mixes texts by different authors. The author tells a model how much weight a text
+carries: a funder's rule, UVM's rule, or someone's advice. What the text attaches to decides which
+scope finds it. How it arrived, crawled or uploaded, decides neither.</p>
+<div class="scroll"><table>
+  <tr><th>Who wrote it</th><th>All of UVM</th><th>A funder or program</th><th>One call</th><th>One proposal</th></tr>
+  <tr><td class="name">UVM</td><td>The requirements corpus, crawled</td>
+    <td><span class="tag prop">gap</span> SPA's own checklist for NSF proposals, its tips for NIH</td>
+    <td>Staff uploads, such as a checklist for this call</td><td></td></tr>
+  <tr><td class="name">The funder</td><td></td>
+    <td>Guides and notices, crawled (decisions 0014 and 0021)</td>
+    <td>Solicitation, amendments and FAQ, crawled</td><td></td></tr>
+  <tr><td class="name">Others</td><td></td><td></td>
+    <td>Staff uploads, such as last year's reviews or a funded proposal</td>
+    <td>The team's drafts and uploads, the reviewers' critiques</td></tr>
+</table></div>
+<p>The gap is UVM's own material about a funder. Today it lives in the requirements corpus only if
+UVM publishes it on www.uvm.edu. Otherwise staff upload it call by call, because a guide's scope takes
+no uploads. Three changes would close it. <span class="tag prop">proposed</span></p>
+<ul>
+  <li>Staff can attach UVM-written material to a funder or a guide. It then appears in the scope of
+    every call that inherits that guide, and stays labelled as UVM's words.</li>
+  <li>Every upload states its kind and its author, such as staff checklist, past reviews or prior
+    proposal. A model then never quotes last year's reviewer as the funder.</li>
+  <li>Funder guides stay crawled and apart from UVM's corpus, as decision 0014 ruled. Whether they
+    become a tool family of their own or stay a scope of the documents tools is a question
+    decision 0023's addendum leaves open. This page leans to keeping them a scope, since one search over a
+    call already reaches its guides.</li>
+</ul>
+
+<h2 id="t-prop">1.4 A proposal and its drafts</h2>
+<p>Only a signed-in person gets these tools. They read the platform's own records of proposals,
+checklists and critiques. Through the person's own Microsoft account, they also read and write the
+team's drafts in Teams.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>Example call</th></tr>
+  <tr><td class="name">proposals_list</td><td>The proposals the person is a party to, with the
+    <code>proposal_id</code> the other tools take. Start here.</td><td><code>{}</code></td></tr>
+  <tr><td class="name">draft_read</td><td>A document's draft: its outline (sections, what is missing,
+    what changed since the last draft check), one section, or the whole file.</td>
+    <td><code>{"proposal_id": "p1", "task_id": "t1", "section": "s7"}</code></td></tr>
+  <tr><td class="name">draft_edit</td><td>Writes into one section of a Markdown draft the platform
+    made, as the person, only when they asked. It is the one tool that changes anything.</td>
+    <td><code>{"proposal_id": "p1", "task_id": "t1", "item_id": "s7", "action": "replace_passage", ...}</code></td></tr>
+  <tr><td class="name">critiques_list</td><td>The reviewers' critiques of an earlier attempt, in
+    their words, for a resubmission.</td><td><code>{"proposal_id": "p1"}</code></td></tr>
+  <tr class="next"><td class="name">proposals_read <span class="tag prop">proposed</span><span class="src">audit, rows 23 and 42; advisor, 2026-11-01</span></td>
+    <td>One proposal's context in one reply: the moves allowed next, deadlines, open tasks, the drafts'
+    open findings, whether critiques exist, the linked call, the team and the thread. Each part gives
+    the id the deeper tool takes. <code>proposals_list</code> already returns title, status, sponsor
+    and due date, so this adds what it lacks. It builds from the same readers the other tools use, such as
+    <code>lib/server/views/checklist.ts</code>, and never from copies of their summaries. With the
+    reviewers' text switched off, the reply leaves the critiques part out. The thread names people,
+    so the model sees names. It is a read.</td>
+    <td><code>{"proposal_id": "p1"}</code></td></tr>
+  <tr class="next"><td class="name">proposals_edit <span class="tag prop">proposed</span><span class="src">!185, item 1; audit, rows 18 and 24</span></td>
+    <td><code>action</code> is <code>create</code> or <code>update</code>. It changes only the person's own draft,
+    and nothing that reaches anyone else. <code>create</code> starts it as Get Started's solo door
+    does, and copies a held call's checklist without a model call. <code>update</code> saves the
+    proposal's form. It is a write.</td>
+    <td><code>{"action": "create", "call_id": "363479", "title": "Peatland methane"}</code></td></tr>
+  <tr class="next"><td class="name">proposals_route <span class="tag prop">proposed</span><span class="src">audit, rows 21, 26 and 30</span></td>
+    <td><code>action</code> is <code>respond</code> or <code>request_rd</code>. Each puts a routine
+    request in front of SPA or RD staff, and staff can act on it or send it back. It is a write.</td>
+    <td><code>{"proposal_id": "p1", "action": "respond"}</code></td></tr>
+  <tr class="next"><td class="name">proposals_submit <span class="tag prop">proposed</span><span class="src">audit, rows 25 and 28</span></td>
+    <td><code>action</code> is <code>submit</code> or <code>withdraw</code>. Both are hard to undo
+    and visible outside the team, so they get their own tool and its own approval. A person who
+    always allows <code>proposals_route</code> has not allowed these. It is a destructive write.</td>
+    <td><code>{"proposal_id": "p1", "action": "submit"}</code></td></tr>
+  <tr class="next"><td class="name">checklist_edit <span class="tag prop">proposed</span><span class="src">!185, item 2</span></td>
+    <td><code>action</code> is <code>set_status</code>, <code>update</code> or <code>add_task</code>,
+    on one task, as <code>draft_edit</code> works on one section. It calls the page's own writers,
+    so the page's locks and refusals hold. It is a write.</td>
+    <td><code>{"proposal_id": "p1", "task_id": "t1", "action": "set_status", "status": "done"}</code></td></tr>
+</table></div>
+<div class="note"><p><strong>What !185 asks the owner to rule.</strong> !185 names these writes
+  <code>proposals_create</code> and <code>checklist_update</code>. Here they are
+  <code>proposals_edit</code>'s <code>create</code> and <code>checklist_edit</code>. For a create on a
+  call with no checklist yet, (a) the create starts the call's draft
+  from the shared daily cap, which reverses decision 0020, item 1, for this one path, or (b) it starts
+  none. The addendum recommends (a), and leaves out the "Draft with AI" prefill and the RD and SPA
+  doors. A checklist edit never sets assignees or anything that names a person, and
+  deletes no task, because a removal also tells the drafter to leave the item out. Until the owner
+  rules, the connector starts nothing and changes no task.</p>
+  <p><strong>Still open.</strong> Posting to the thread reaches named people. It would be a fourth
+  write tool, or an action of <code>proposals_route</code>.</p>
+  <p><strong>Every one of these needs an addendum first.</strong> Decision 0006's addendum of
+  2026-10-08, item 2: "a new tool, or a new field, amends this addendum before the code". That
+  covers <code>proposals_read</code> and each write tool, one addendum each.</p></div>
+
+<h2 id="t-budget">1.5 Budgets and facts <span class="tag yes">served</span></h2>
+<p>Decisions 0024 and 0025, accepted on 2026-11-01, add this family. UVMClick stays the record of a
+budget. horizon computes, compares and checks a draft before SPA enters it there (0025, item 1). <code>budget_compute</code> (!238) serves the
+budget engine, built and tested in <code>frontend/src/lib/tools/budget/</code> (!237). The facts seed is loaded (<code>feat/facts-seed</code>).
+<code>facts_read</code> and <code>budget_compare</code> are not served yet.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>Example call</th></tr>
+  <tr class="next"><td class="name">facts_read <span class="tag ask">decided</span><span class="src">decision 0024</span></td>
+    <td>Facts as values rather than passages, in a scope: UVM, a funder guide or a call. UVM's F&amp;A
+    and fringe rates, the EIN and UEI, and a funder's salary or indirect cap. Each value carries the
+    sentence it rests on, its source, its effective dates and whether SPA has confirmed it. It answers
+    questions about a rate. It is never a step before a computation (0025, item 4). It is a Low-tier read.</td>
+    <td><code>{"uvm": true, "name": "fringe_rate", "as_of": "2027-07-01"}</code></td></tr>
+  <tr><td class="name">budget_compute <span class="tag yes">served</span><span class="src">decision 0025, item 5</span></td>
+    <td>It takes a budget in the <code>budget-1</code> shape (periods, lines, people, subawards) and up to
+    five what-ifs. It looks up UVM's and the funder's rates itself, so a model never passes a rate in.
+    It returns the inputs as the engine read them, the base, F&amp;A and totals per period, and a
+    <code>checks</code> block, each check naming the fact or rule it rests on. It is stateless, Low tier and read-only, and needs no
+    account. With an optional <code>call_id</code> it reports the call's limits and
+    its funder guides' limits by name, but checks none of them against the budget yet (decision 0025,
+    item 8; addendum C1). Nothing is stored.</td>
+    <td><code>{"budget": {...}, "whatifs": [...]}</code></td></tr>
+  <tr class="next"><td class="name">budget_compare <span class="tag prop">proposed</span><span class="src">decision 0025, addendum A4</span></td>
+    <td>It cross-checks a proposal's budget documents against each other, the call's limits and the
+    justification. The documents are the team's workbook and the Summary Proposal Budget. Readers built for their known layouts read them, not a model. It writes nothing, and a person accepts a
+    finding before it becomes a task (addendum C3). It needs an account and is read-only.</td>
+    <td><code>{"proposal_id": "p1"}</code></td></tr>
+</table></div>
+<p>A stored working copy (<code>budget_read</code>, <code>budget_edit</code>) is not decided. It
+needs a tier ruling on a stored budget with salaries, and a place to keep it (0025, "Not decided
+here"). The first problem-first skill, <code>budget-build</code>, shipped with
+<code>budget_compute</code> in !238. The arithmetic, the reference tables and what CODEC's prototype settled
+are on <a href="budgets.html">budgets.html</a>; why the rates are not a separate call is on
+<a href="problems-and-tools.html#budget">problems-and-tools.html</a>.</p>
+
+<h2 id="t-awards">1.6 Awards <span class="tag prop">proposed</span></h2>
+<p>No tool covers an award yet. Post-award questions compare spending with budgets and dates, as the
+Anthropic travel-budget example does. They need UVM's own award and spending records, at a tier still
+to rule. The first tool can start on public award data, such as NSF's award search and NIH
+RePORTER.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>What it gives</th><th>Example call</th></tr>
+  <tr class="next"><td class="name">awards_read <span class="tag prop">proposed</span><span class="src">from the strong tasks</span></td>
+    <td>With an id, it returns one award: its period, budget by category, sponsor terms and the reports it owes.
+    Without an id, it returns awards filtered by PI, unit or sponsor program, with amounts and dates. Over public
+    data, the list also answers "what did funded budgets in this program look like?" It is a read.</td>
+    <td><code>{"award_id": "a1"}</code><br><code>{"sponsor_program": "NSF DEB", "since": "2022-01-01"}</code></td></tr>
+  <tr class="next"><td class="name">expenditures_list <span class="tag prop">proposed</span><span class="src">from the strong tasks</span></td>
+    <td>An award's spending transactions over a period. We keep it apart from <code>awards_read</code>,
+    because it can be long and only some questions need it. It needs a feed from UVM's financial
+    system, which CODEC never built. Until then, <code>awards_read</code> can return the award's
+    budget with each line's encumbrance, expenditure and projected amount per year, as CODEC's
+    spend-down view does. It is a read.</td>
+    <td><code>{"award_id": "a1", "from": "2026-07-01", "to": "2026-09-30"}</code></td></tr>
+</table></div>
+
+<h2 id="t-chain">1.7 How the tools chain</h2>
+<p>As <code>get_team_members</code> returns the <code>user_id</code> that <code>get_expenses</code>
+takes, each of our tools returns the ids the next one takes. Three chains cover most questions:</p>
+<figure>
+<svg viewBox="0 0 1000 300" role="img" aria-labelledby="chain-title chain-desc">
+  <title id="chain-title">The three chains of ids</title>
+  <desc id="chain-desc">Three rows. In the rules row, units leads to search, then to outline or read
+    by section id. In the call row, match gives a call id, which eligibility, checklist and
+    documents_list take, and documents_read reads a checklist item's source_ref. In the proposal
+    row, proposals_list gives a proposal_id, checklist_read gives task and item ids, and draft_read
+    gives a section version, which draft_edit needs. Also, documents_read reads the sponsor text
+    behind an item.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+  <text x="10" y="20" class="d-group">UVM'S RULES</text>
+  <rect x="10" y="30" width="170" height="44" rx="6" class="d-acc"/><text x="22" y="57" class="d-text">requirements_units</text>
+  <rect x="230" y="30" width="190" height="44" rx="6" class="d-acc"/><text x="242" y="57" class="d-text">requirements_search</text>
+  <rect x="490" y="30" width="200" height="44" rx="6" class="d-acc"/><text x="502" y="57" class="d-text">outline / read</text>
+  <path d="M180,52 L226,52" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M420,52 L486,52" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="428" y="44" class="d-sub">section id</text>
+
+  <text x="10" y="112" class="d-group">FUNDING OPPORTUNITIES</text>
+  <rect x="10" y="122" width="170" height="44" rx="6" class="d-acc"/><text x="22" y="149" class="d-text">opportunities_match</text>
+  <rect x="230" y="122" width="190" height="44" rx="6" class="d-acc"/><text x="242" y="149" class="d-text">eligibility / checklist</text>
+  <rect x="490" y="122" width="200" height="44" rx="6" class="d-acc"/><text x="502" y="149" class="d-text">documents_read</text>
+  <rect x="760" y="122" width="200" height="44" rx="6" class="d-acc"/><text x="772" y="149" class="d-text">documents_list/search</text>
+  <path d="M180,144 L226,144" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="186" y="136" class="d-sub">call id</text>
+  <path d="M420,144 L486,144" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="424" y="136" class="d-sub">source_ref</text>
+  <path d="M756,144 L694,144" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="712" y="136" class="d-sub">key</text>
+
+  <text x="10" y="204" class="d-group">A PROPOSAL</text>
+  <rect x="10" y="214" width="170" height="44" rx="6" class="d-mod"/><text x="22" y="241" class="d-text">proposals_list</text>
+  <rect x="230" y="214" width="190" height="44" rx="6" class="d-mod"/><text x="242" y="241" class="d-text">checklist_read</text>
+  <rect x="490" y="214" width="200" height="44" rx="6" class="d-mod"/><text x="502" y="241" class="d-text">draft_read</text>
+  <rect x="760" y="214" width="200" height="44" rx="6" class="d-mod"/><text x="772" y="241" class="d-text">draft_edit</text>
+  <path d="M180,236 L226,236" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="184" y="228" class="d-sub">proposal_id</text>
+  <path d="M420,236 L486,236" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="430" y="228" class="d-sub">task_id</text>
+  <path d="M690,236 L756,236" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="700" y="228" class="d-sub">version</text>
+  <path d="M325,260 C325,290 590,290 590,170" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="360" y="290" class="d-sub">item_id then the sponsor's words behind an item</text>
+</svg>
+<figcaption>Blue tools read published data, and orange tools need the person's account.
+<code>documents_read</code>'s <code>item_id</code> links the proposal chain to the call chain.</figcaption>
+</figure>
+<p>The chains also show the questions the tools leave to the model. After
+<code>checklist_read</code> and <code>draft_read</code>, the model decides whether a section meets a
+checklist item. No tool says "this proposal is ready".</p>
+
+<h2 id="t-lists">1.8 Each tool against "an answer, not an inventory"</h2>
+<p>The rule, and where it comes from, is on <a href="problems-and-tools.html#answers">problems-and-tools.html</a>. A tool should return the answer a person wanted, not an inventory for the model to filter, nor a chain of calls the server could make in one.</p>
+<p>The advisor session reviewed the verdicts below on 2026-11-01, against
+<code>main</code> at <code>2614a6c4</code>.</p>
+<div class="scroll"><table>
+  <tr><th>Tool</th><th>Verdict</th><th>Why</th></tr>
+  <tr><td class="name">critiques_list</td><td>Fine</td><td class="small">It returns the critiques
+    themselves, extracted, placed and with <code>how_to_check</code>. It is compiled context, not an
+    inventory.</td></tr>
+  <tr><td class="name">checklist_read</td><td>Fine</td><td class="small">With a
+    <code>proposal_id</code> it assembles tasks, status, sponsor quotes, required documents and
+    eligibility in one reply. It has the <code>get_customer_context</code> shape.</td></tr>
+  <tr><td class="name">draft_read</td><td>Fine</td><td class="small">Its outline says where to look:
+    <code>open_findings</code> and <code>changed_since_check</code>. It follows the <code>search_logs</code>
+    idea.</td></tr>
+  <tr><td class="name">uvm_requirements_units</td><td>Fine, ruled</td><td class="small">Decision 0022
+    closed its fold into search on 2026-10-30. It stays a tool, and no measurement runs.</td></tr>
+  <tr><td class="name">proposals_list</td><td>Half</td><td class="small">It is a good finder. But "where
+    does my proposal stand?" takes five calls today. <code>proposals_read</code> answers it in
+    one.</td></tr>
+  <tr><td class="name">documents_list</td><td>Too much, too early</td><td class="small">For a call it
+    returns each year's synopsis and eligibility text, up to ten years. The routing in
+    <code>instructions.ts</code> and its own description ("Start here") send a model to it first,
+    even when <code>documents_search</code> would return the passage with its key.</td></tr>
+  <tr><td class="name">expenditures_list</td><td>Dropped</td><td class="small">Raw spending lines are
+    <code>read_logs</code>. <code>awards_read</code> returns a spending summary with flags from
+    stated rules instead.</td></tr>
+</table></div>
+
+<h3>The changes, in order</h3>
+<ol>
+  <li><strong>Trim <code>documents_list</code>'s call payload.</strong> Return a year's synopsis and
+    eligibility text only for a year with no documents, the case its description calls "the only
+    material". It touches no ruling. <a href="https://gitlab.uvm.edu/codec/horizon/-/merge_requests/227">!227</a> merged it on 2026-11-01.</li>
+  <li><strong>Search first.</strong> <code>documents_search</code> becomes the default, and
+    <code>documents_list</code> answers "what is held for this call?" or follows a search that
+    missed. Search hits already name their call and year, so little is lost. This amends decision
+    0022, item 11, which rules the order "list, then search, then read" and serves it in the
+    server's instructions, the connector's and the Ask tabs' prompts. A test holds the skill's copy
+    to it. A docs-only branch comes first, then the code.</li>
+  <li><strong><code>proposals_read</code>,</strong> with its decision 0006 addendum.</li>
+  <li><strong>The write tools,</strong> each with its own addendum.</li>
+</ol>
+<div class="note"><p><strong>No benchmark for tool choice.</strong> At fourteen tools the owner
+  retired the call-reading benchmark (2026-10-29) and refused a five-question measurement as too
+  small (2026-10-30). Each Ask-tab turn already records its tool calls in its trace, so the sequence
+  after a change can be read. That is an observation, not a measurement, and never evidence of
+  demand. Each change stays small and reversible instead. The companion page
+  <a href="evaluation.html">evaluation.html</a> sets out what horizon measures today and proposes an
+  agent-level task set.</p></div>
+
+<!-- ============================================================ PART 2 -->
+<h2 id="skills" class="part">Part 2. Skills</h2>
+<p class="claim">A tool says what it does. A skill says how to get a person's outcome out of several
+tools, and how far to trust what they return. A tool-first skill teaches how to read one family's
+results; a problem-first skill makes the calls for an outcome
+(<a href="problems-and-tools.html#skills">problems-and-tools.html</a>).</p>
+
+<h2 id="s-now">2.1 What we ship today</h2>
+<p>The Claude Code plugin ships two skills, <code>uvm-requirements</code> and <code>budget-build</code>, in
+<code>plugin/skills/</code>. <code>uvm-requirements</code> is tool-first. Most of its text teaches how to read results,
+not which tool to choose:</p>
+<ul>
+  <li>A real question has two halves, the funder's and UVM's, and these tools hold UVM's half only.</li>
+  <li>Quote the revision date with every rule. These procedures date from 2018 to 2026.</li>
+  <li>A scanned letter that cannot be read is held, not missing. Give the link and state no value
+    from it.</li>
+  <li>"My results don't have it" is not "UVM has no rule". Search again before saying so.</li>
+  <li>Off the corpus, a UVM page is a source and a third-party aggregator is not.</li>
+</ul>
+<p><code>budget-build</code> builds or checks a UVM grant proposal budget with <code>budget_compute</code>,
+including what-ifs. It tells the model never to do a budget's arithmetic itself or copy a rate from a web
+page, and to say that SPA enters the final budget in UVMClick.</p>
+<p>The <code>uvm-requirements</code> skill's list of which tool to call when repeats what the server's <code>instructions</code> and each
+tool's description already say. That part could shrink to a pointer. A test,
+<code>frontend/tests/tools/skill.test.ts</code>, fails unless some skill names every served tool, so
+shrinking it needs a ruling.</p>
+
+<h2 id="s-next">2.2 Workflows our tools could carry (proposed)</h2>
+<p>These are proposals. Apart from <code>budget-build</code>, none is written yet. Each is an outcome a
+person asks for, so by the specification's split (<a href="#s-boundary">below</a>) each would be a
+server prompt the person starts, not a skill the model picks. <code>budget-build</code> shipped as
+a skill in the plugin before that split was drawn. Each uses only tools we serve today. The last
+column is what the workflow teaches the model, because no tool makes that call.</p>
+<div class="scroll"><table>
+  <tr><th>Skill</th><th>The strong task</th><th>Calls, in order</th><th>Judgment it teaches</th></tr>
+  <tr class="next"><td class="name">find-funding <span class="tag prop">proposed</span></td>
+    <td>"Which open calls fit my lab, and can I apply to the best three?"</td>
+    <td><code>opportunities_match</code> (<code>mine</code> or text) then for the top calls,
+      <code>opportunities_eligibility</code> then <code>documents_list</code> for dates and ceilings</td>
+    <td class="small">A ranking is fit, never eligibility. A listed applicant code does not mean UVM
+      may apply. Unknown is not no.</td></tr>
+  <tr class="next"><td class="name">prepare-to-apply <span class="tag prop">proposed</span></td>
+    <td>"I want to apply to this call, due in three weeks. What do the funder and SPA need from me?"</td>
+    <td><code>opportunities_eligibility</code> then <code>checklist_read</code> then
+      <code>documents_search</code> for the funder's half then <code>uvm_requirements_search</code> for
+      lead times and approvals</td>
+    <td class="small">Answer the two halves apart and say which is which. Judge what three weeks
+      still allows. The checklist leaves out what the team's own choices bring, such as subawards and
+      cost share.</td></tr>
+  <tr class="next"><td class="name">draft-review <span class="tag prop">proposed</span></td>
+    <td>"Does our narrative cover everything the call asks for?"</td>
+    <td><code>proposals_list</code> then <code>checklist_read</code> (proposal) then
+      <code>draft_read</code> outline then sections with open findings then
+      <code>documents_read</code> by <code>item_id</code> for the sponsor's words</td>
+    <td class="small">A heading that exists is not a requirement met. Quote the sponsor, never
+      paraphrase it as theirs. Start with the sections that changed or have open findings.</td></tr>
+  <tr class="next"><td class="name">resubmission <span class="tag prop">proposed</span></td>
+    <td>"We're resubmitting. Does the new draft answer each reviewer?"</td>
+    <td><code>critiques_list</code> then <code>draft_read</code> then <code>checklist_read</code></td>
+    <td class="small">A critique is feedback, never a compliance failure. Follow the reply's
+      <code>how_to_check</code>.</td></tr>
+  <tr class="next"><td class="name">draft-edit <span class="tag prop">proposed</span></td>
+    <td>"Tighten the broader impacts section to fit the page limit."</td>
+    <td><code>draft_read</code> (section and version) then <code>documents_search</code> for the
+      limit then <code>draft_edit</code></td>
+    <td class="small">Write only when asked. Read the section again later, because an open editor
+      can save over the write. Never write a Word file or an upload.</td></tr>
+  <tr><td class="name">budget-build <span class="tag yes">served</span></td>
+    <td>"Here is our draft budget. Do the totals and rates hold up, and what if the postdoc starts a year later?"</td>
+    <td><code>budget_compute</code> with the budget and its what-ifs, then <code>uvm_requirements_search</code> or <code>documents_search</code> for a rule a check names</td>
+    <td class="small">The checks find what breaks a rule; the skill judges what is unusual and says which findings are rules and which are opinions. It shipped with <code>budget_compute</code> in !238 (decision 0025, order step 2).</td></tr>
+</table></div>
+<p>Two tool-first skills are worth adding next. One would teach the documents family, such as
+telling funder texts from staff uploads and reading on by offset. The other would teach the call
+family, such as what a verdict, a quote or <code>not_judged</code> can support.
+<span class="tag prop">proposed</span></p>
+
+<h3 id="s-boundary">Where a tool stops and a skill begins: the draft check</h3>
+<p>The MCP specification sorts what a server offers by who decides to use it
+(<a href="https://modelcontextprotocol.io/specification/2026-07-28/server">server features</a>):</p>
+<div class="scroll"><table>
+  <tr><th>Primitive</th><th>Who decides</th><th>Example</th><th>In horizon</th></tr>
+  <tr><td class="name">Tool</td><td>The model</td><td>An action it calls on its own</td><td>Every tool in Part 1</td></tr>
+  <tr><td class="name">Resource</td><td>The client application</td><td>A file attached as context</td><td>None</td></tr>
+  <tr><td class="name">Prompt</td><td>The person</td><td>A slash command or a menu item</td><td>None yet <span class="tag prop">proposed</span></td></tr>
+</table></div>
+<p>A skill sits beside these. It is not part of MCP. The person's client loads it, and the model
+uses it when the conversation calls for it.</p>
+<p>Two questions describe any feature. <strong>Who starts it:</strong> a
+person in the app, a person in their own assistant, or the model on its own. <strong>Where the
+judgment is made:</strong> on horizon's server, by our model, kept and measurable; or in the
+person's client, by their model, gone when the conversation ends.</p>
+<div class="scroll"><table>
+  <tr><th></th><th>Judged on horizon's server</th><th>Judged in the person's client</th></tr>
+  <tr><td class="name">A person in the app</td><td>The Draft check tab <span class="tag yes">served</span>.
+    A PI, a team member or staff presses the button. The app makes one model call per document and
+    checks every quote against the draft. It keeps the findings for the team, never the draft's
+    text, and the cost falls under the app's daily cap.</td><td>Not a case, because the app's pages always judge on the server.</td></tr>
+  <tr><td class="name">A person in their own assistant</td><td>A tool to start the app's check from Claude
+    <span class="tag prop">proposed</span>. It would be a write tool that spends horizon's cap and stores rows
+    the team sees, so it needs its own addendum to decision 0006. A run takes minutes, so it
+    would return a run id to read later, or use the MCP tasks extension, which Claude Code and claude.ai
+    support and Claude Desktop does not.</td><td>A <code>/draft-review</code> prompt
+    <span class="tag prop">proposed</span>. The person types the command, and the server's prompt
+    tells their model what to do. It starts from the app's findings, read through
+    <code>draft_read</code> (<code>open_findings</code>, <code>changed_since_check</code>), and labels
+    anything beyond them as the assistant's own reading.</td></tr>
+  <tr><td class="name">The model on its own</td><td>Not a case, because the model only reads what the server
+    already judged, through tools.</td><td>A skill, which the model loads because the conversation
+    turns to drafts or rules. <code>uvm-requirements</code> is this kind.</td></tr>
+</table></div>
+<p>So a tool hands over facts and judgments already made and kept: the draft's sections, the
+checklist, the sponsor's words, the last check's findings. It never judges for this conversation.
+The server makes any judgment the team relies on, because that judgment has to be the same for everyone,
+recorded and measurable. It reaches an assistant as a record through a tool. A workflow a person
+starts from their own assistant is a prompt. Knowledge the model needs whenever it touches a family
+of tools is a skill, with its must-know lines also in the server's instructions.</p>
+<p>One method per judgment. The draft check's method lives in the app
+(<code>lib/server/drafter/draft-check.ts</code>), and only the app's runs are kept, so only they could be
+benchmarked. A prompt or
+skill that re-derived the same judgment with its own wording would be a second, unmeasured method
+that drifts. The client side reads the server's findings and adds only what it labels as its own.</p>
+<p>The same holds for the other app runs. The checklist drafter and Compare with reviews reach an
+assistant through <code>checklist_read</code> and <code>critiques_list</code>. The mock review
+panel's results reach no tool yet.</p>
+
+<h2 id="s-where">2.3 What goes where</h2>
+<p>The same sentence could live in a tool's description, in the server's instructions, in a skill
+or in a reply's <code>message</code>. Which clients see each place decides where the sentence
+goes.</p>
+<div class="scroll"><table>
+  <tr><th>Place</th><th>Who sees it</th><th>What belongs there</th></tr>
+  <tr><td class="name">Tool description</td><td>Every MCP client, whenever the tool is loaded.
+    Claude Code may load it only when a search finds it, and cuts it at 4,096 characters, or 16,384 when
+    found by search.</td><td>What the tool does, when to use it, when not, what to call next. Words a
+    model would search for, near the start.</td></tr>
+  <tr><td class="name">Server instructions</td><td>Most clients, at connection. Claude Code loads them
+    even with tool search on, and cuts them at 4,096 characters.</td><td>Which family answers which
+    question, the reply statuses, and the few rules an assistant must never break.</td></tr>
+  <tr><td class="name">Reply <code>message</code></td><td>Every client, after the call.</td>
+    <td>The next step for this reply: read on, narrow the search, try again later.</td></tr>
+  <tr class="next"><td class="name">Server prompt <span class="tag prop">proposed</span></td><td>Clients that
+    support MCP prompts, when the person picks it: Claude Code lists them as commands
+    (<code>/horizon:draft-review</code>). The server serves it from <code>/mcp</code>, so no plugin is needed.</td>
+    <td>A workflow a person starts: the calls in order and how to reach the judgment.</td></tr>
+  <tr><td class="name">Skill</td><td>Clients that load skills: Claude Code through our plugin today.
+    Over MCP, only a few clients load skills so far.</td><td>The method for an outcome, and how to judge and
+    quote results whenever the model touches a family of tools. These are too long and too situational for
+    instructions.</td></tr>
+</table></div>
+<div class="note"><p><strong>Rule of thumb.</strong> If an outside user's assistant gets it wrong
+  without the sentence, the sentence goes in the instructions or the description, because those reach
+  every client. If it makes a good answer better, it goes in a skill.</p></div>
+
+<!-- ============================================================ PART 3 -->
+<h2 id="mcp" class="part">Part 3. MCP</h2>
+<p class="claim">The app serves one address, <code>/mcp</code>, in its own process. Any MCP client
+reaches the tools there, and the plugin adds the skill for Claude Code.</p>
+
+<h2 id="m-path">3.1 One request's path</h2>
+<ol>
+  <li><strong>Connection.</strong> The client sends a bearer token with every request. A person
+    makes an <code>hzp_</code> token in the app, and a service gets an <code>svc_</code> token from the
+    operator. The plugin sets the address and asks for the token.</li>
+  <li><strong>Discovery.</strong> A 2026-era client sends <code>server/discover</code> and gets the
+    server's identity and <code>instructions</code>. A 2025-era client sends <code>initialize</code>
+    and gets the same. The server answers both eras on one URL.</li>
+  <li><strong>The list.</strong> <code>tools/list</code> returns the tools this caller may call:
+    eight for a service, all fifteen for a person with both switches on. Each tool carries its
+    description, input schema, annotations and <code>anthropic/maxResultSizeChars</code>. The
+    published tools and their variants also carry a loose output schema.</li>
+  <li><strong>The call.</strong> Every <code>tools/call</code> goes through <code>callTool</code>,
+    which checks the input, checks the caller against the tool's <code>account</code> field, opens a
+    read-only transaction for an account tool, runs the handler and wraps the reply.</li>
+  <li><strong>The reply.</strong> The reply is the envelope <code>{status, message, ...}</code> as
+    text, with the same JSON in <code>structuredContent</code>. A <code>not_found</code> or
+    <code>refused</code> reply also sets <code>isError</code>.</li>
+</ol>
+<p>The app's own pages, such as the Ask tabs and the drafter, call the same tools through the same
+<code>callTool</code>, without MCP. A call records whether it came from the person's own assistant or
+from the platform (<code>via</code>).</p>
+
+<h3>What our replies cost the caller</h3>
+<p>Every reply lands in someone else's context, and an outside user's assistant pays for it.
+Anthropic's <a href="https://platform.claude.com/cookbook/cost-optimization-cost-optimization">cost
+cookbook</a> asks tool authors for narrow accessors over dumps, with parameters that trim a reply
+before it reaches the model. Our tools mostly do this already: <code>types</code>,
+<code>limit</code> and <code>offset</code>, replies cut at 12,000 characters with a
+<code>truncated</code> status that says where to read on, and since !227, no synopsis for a year
+whose texts are listed. The tool list keeps one order and one shape through a conversation, so a
+client's prompt cache over it stays valid. The cookbook also says not to restate the tools in the
+system prompt. That fits our Ask tabs, which load every tool and get the routing text as their
+system prompt. It does not fit Claude Code, where tool search defers our tools and the server's
+instructions are what tell a model when to search. What each reply costs, and what a whole task
+costs, is measured on <a href="evaluation.html#pass">evaluation.html</a>.</p>
+
+<h2 id="m-spec">3.2 What we use of the spec</h2>
+<p>This table compares horizon with the MCP specification of 2026-07-28 and the TypeScript SDK 2.4.0, the one the app runs.</p>
+<div class="scroll"><table>
+  <tr><th>Spec feature</th><th>Status</th><th>How</th></tr>
+  <tr><td>Stateless serving, both protocol eras</td><td><span class="tag yes">in use</span></td>
+    <td class="small">The server builds one <code>McpServer</code> per request. The SDK's handler
+      answers 2026-era requests, and an endpoint we wire ourselves answers 2025-era ones in plain
+      JSON. The gate already speaks 2026.</td></tr>
+  <tr><td>Server <code>instructions</code></td><td><span class="tag yes">in use</span></td>
+    <td class="small">They say which family answers which question and what each status means,
+      then add each family's own text. Claude Code cuts them at 4,096 characters, so the important part
+      comes first and <code>frontend/tests/agent-instructions.test.ts</code> holds them under the limit
+      (decision 0023, addendum 2026-10-31, item 16).</td></tr>
+  <tr><td>A tool list that differs by caller</td><td><span class="tag yes">in use</span></td>
+    <td class="small">The spec allows this. The list "MAY vary by the authorization presented on the request". The
+      SDK's default <code>cacheScope</code> is <code>private</code>, which is right for it.</td></tr>
+  <tr><td><code>outputSchema</code> and <code>structuredContent</code></td><td><span class="tag ask">partial</span></td>
+    <td class="small">The published tools and their variants advertise loose schemas. The documents
+      tools as the app serves them, and the account tools, advertise none yet.</td></tr>
+  <tr><td>Annotations</td><td><span class="tag yes">in use</span></td>
+    <td class="small">Every tool states its annotations. All are read-only except
+      <code>draft_edit</code>, which is destructive and not idempotent. Claude Code runs read-only calls in parallel.</td></tr>
+  <tr><td>Authorization</td><td><span class="tag yes">our own</span></td>
+    <td class="small">The spec makes OAuth optional. The person puts the token in their client's
+      configuration, so in Claude Code a bad token shows as a failed connection, not as a sign-in
+      prompt.</td></tr>
+</table></div>
+
+<h2 id="m-not">3.3 What we do not use yet</h2>
+<div class="scroll"><table>
+  <tr><th>Spec feature</th><th>What it would give us</th><th>Why not yet</th></tr>
+  <tr><td>Skills over MCP (<code>io.modelcontextprotocol/skills</code>)</td>
+    <td class="small">The skill served from <code>/mcp</code> itself, so any client that supports it
+      gets it with the tools. The SDK we run, 2.4.0, has it.</td>
+    <td class="small">Claude Code, Desktop, claude.ai and Cursor do not load it yet, so the plugin is
+      the route that works. The owner said on 2026-11-02 that the plugin is fine for now and the change is not for this round.</td></tr>
+  <tr><td>Resources</td><td class="small">Documents an assistant can attach by URI. The skills
+      extension serves skills as resources.</td><td class="small">Not used. Decision 0023's addendum of
+      2026-10-31 leaves out <code>resource_link</code>.</td></tr>
+  <tr><td>Prompts</td><td class="small">Slash commands a person picks, such as
+      <code>/horizon:draft-review</code>. They would carry the workflows of 2.2 to every client that
+      supports prompts, Claude Desktop users included, without the plugin.</td>
+    <td class="small">Proposed on this page (<a href="#s-boundary">2.2</a>). Decision 0023's addendum
+      of 2026-10-31 serves tools only, so prompts need an addendum and the owner's ruling.</td></tr>
+  <tr><td><code>input_required</code></td><td class="small">A tool asks the person a question mid-call,
+      for example "which proposal?".</td><td class="small">Decision 0023's addendum of 2026-10-31 leaves
+      it out.</td></tr>
+  <tr><td>Code mode, progressive discovery</td><td class="small">Ways for a client to handle
+      hundreds of tools.</td><td class="small">Fifteen tools use a few percent of a model's context.</td></tr>
+</table></div>
+
+<h2 id="m-code">3.4 Where it lives in the code</h2>
+<p>To see how the tool setup works, read these files on GitLab, in this order. Links point to
+<code>main</code>, so they show the code as it is now, which may have moved on from this page.</p>
+<div class="scroll"><table>
+  <tr><th>What</th><th>File</th><th>What to look for</th></tr>
+  <tr><td class="name">Start here</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/AGENTS.md"><code>frontend/src/lib/server/tools/AGENTS.md</code></a></td><td class="small">The tool layer's own guide: its folders, what each may import, and the rules its tests hold.</td></tr>
+  <tr><td class="name">What a tool is</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/tool.ts"><code>frontend/src/lib/server/tools/tool.ts</code></a></td><td class="small">The one <code>Tool</code> type: name, title, description, input, output, annotations, cost, the <code>account</code> field, and the handler.</td></tr>
+  <tr><td class="name">The tools the app serves</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/registry.ts"><code>frontend/src/lib/server/tools/app/registry.ts</code></a></td><td class="small"><code>APP_TOOLS</code>, the one list in the order <code>tools/list</code> returns it, and <code>callTool</code>, the one way a call gets in.</td></tr>
+  <tr><td class="name">Tools over published data</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/frontend/src/lib/server/tools/published"><code>frontend/src/lib/server/tools/published</code></a></td><td class="small">One folder per family (<code>requirements/</code>, <code>opportunities/</code>, <code>documents/</code>), with <code>lanes/</code> and <code>text-search/</code> for the search machinery. Imports nothing from the app.</td></tr>
+  <tr><td class="name">Tools that need an account</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/frontend/src/lib/server/tools/account"><code>frontend/src/lib/server/tools/account</code></a></td><td class="small">One file per tool, and the variants of published tools that add a person's half (<code>proposal_id</code>, <code>mine</code>, <code>person</code>).</td></tr>
+  <tr><td class="name">The MCP server</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/server.ts"><code>frontend/src/lib/server/tools/server.ts</code></a></td><td class="small"><code>buildServer</code>: one <code>McpServer</code> per request, both protocol eras, the loose output schemas and the annotation presets.</td></tr>
+  <tr><td class="name">The /mcp endpoint</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/routes/mcp/+server.ts"><code>frontend/src/routes/mcp/+server.ts</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/endpoint.ts"><code>frontend/src/lib/server/tools/app/endpoint.ts</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/app/connector.ts"><code>frontend/src/lib/server/tools/app/connector.ts</code></a></td><td class="small">The route, then the HTTP side (token, rate limit, log line), then the protocol side.</td></tr>
+  <tr><td class="name">Who is calling</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/caller.ts"><code>frontend/src/lib/server/tools/caller.ts</code></a></td><td class="small">The caller of a call: an account, a service token, or no one on the headless host, and <code>via</code>.</td></tr>
+  <tr><td class="name">The reply</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/tools/envelope.ts"><code>frontend/src/lib/tools/envelope.ts</code></a></td><td class="small">The envelope <code>{status, message, ...}</code> every tool replies with.</td></tr>
+  <tr><td class="name">Server instructions</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/instructions.ts"><code>frontend/src/lib/server/tools/instructions.ts</code></a></td><td class="small">The text a client gets at connection: which family answers which question, and what each status means.</td></tr>
+  <tr><td class="name">The headless host</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/host.ts"><code>frontend/src/lib/server/tools/host.ts</code></a></td><td class="small"><code>make tools-dev</code>: the published tools on loopback, for development and the gate only.</td></tr>
+  <tr><td class="name">What clients see</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/tests/snapshots/agent-tools.json"><code>frontend/tests/snapshots/agent-tools.json</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/tests/snapshots/agent-tools-service.json"><code>frontend/tests/snapshots/agent-tools-service.json</code></a></td><td class="small">The exact <code>tools/list</code> a person and a service get. A change to a tool's text or schema shows here first.</td></tr>
+  <tr><td class="name">Tests on the text</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/tests/tool-descriptions.test.ts"><code>frontend/tests/tool-descriptions.test.ts</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/tests/agent-instructions.test.ts"><code>frontend/tests/agent-instructions.test.ts</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/tests/tools/skill.test.ts"><code>frontend/tests/tools/skill.test.ts</code></a></td><td class="small">Descriptions and instructions under Claude Code's 4,096-character cut, and every tool and field a skill names is one the server serves.</td></tr>
+  <tr><td class="name">The plugin and its skill</td><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/README.md"><code>plugin/README.md</code></a><br><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/skills/uvm-requirements/SKILL.md"><code>plugin/skills/uvm-requirements/SKILL.md</code></a></td><td class="small">What a Claude Code user installs: the /mcp address, the token prompt and the <code>uvm-requirements</code> skill.</td></tr>
+</table></div>
+
+<h2 id="open">Open questions</h2>
+<ul>
+  <li>Do we rename <code>opportunity_id</code> and <code>call_id</code> to one name?</li>
+  <li>Do workflows a person starts become server prompts (an addendum to decision 0023), with skills
+    kept for knowledge the model needs whenever it uses a family of tools?</li>
+  <li>Which workflow comes first: <code>prepare-to-apply</code> (published data, reaches outside users)
+    or <code>draft-review</code> (needs an account, closest to what SPA does)?</li>
+  <li>Should the skill test still require every tool to be named in a skill, now that the
+    instructions route between tools?</li>
+  <li>Which rules from <code>uvm-requirements</code> move into the server's instructions, so that
+    clients without skills get them?</li>
+  <li>Decision 0025 answers where a budget comes from for now: in the call to
+    <code>budget_compute</code>, or read from the team's workbook by <code>budget_compare</code>. Does
+    a stored working copy (<code>budget_read</code>, <code>budget_edit</code>) ever come, and at which
+    tier?</li>
+  <li>Is "split a write where a person would approve it differently" the rule for every write tool?
+    It gives four: <code>proposals_edit</code>, <code>proposals_route</code>,
+    <code>proposals_submit</code> and <code>checklist_edit</code>, next to <code>draft_edit</code>.
+    Where does <code>request_rd</code> belong, since it reaches staff but can be undone?</li>
+</ul>
+
+</main>
+</body>
+</html>

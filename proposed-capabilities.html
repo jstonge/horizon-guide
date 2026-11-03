@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: proposed capabilities</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --ext-bg: #f0f1f4; --code-bg: #eef1f5;
+    --yes: #2d7a46; --yes-bg: #e3f3e8; --part: #8a6a00; --part-bg: #f8f0d0; --prop: #8a4b9e; --prop-bg: #f3e8f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --ext-bg: #20242c; --code-bg: #232833;
+      --yes: #7fcf98; --yes-bg: #1a3324; --part: #e3c766; --part-bg: #352e14; --prop: #d39be4; --prop-bg: #33213b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h2 + p.claim { margin-top: 0; }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  figure { margin: 24px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; max-width: 80ch; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.cap { font-weight: 600; min-width: 13em; }
+  td.st { white-space: nowrap; }
+  td.how { font-size: 0.9rem; color: var(--muted); }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; white-space: nowrap; }
+  .tag.yes { color: var(--yes); background: var(--yes-bg); }
+  .tag.part { color: var(--part); background: var(--part-bg); }
+  .tag.prop { color: var(--prop); background: var(--prop-bg); }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .watch { display: block; margin-top: 4px; font-size: 0.82rem; color: var(--mod); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin: 16px 0; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--panel); }
+  .card h3 { margin: 0; font-size: 1.6rem; }
+  .card p { margin: 4px 0 0; font-size: 0.95rem; }
+  h2.part { font-size: 1.6rem; margin-top: 64px; border-top: 3px solid var(--accent); }
+  .d-feat { fill: var(--panel); stroke: var(--accent); stroke-width: 1.3; }
+  .d-base { fill: var(--low-bg); stroke: var(--low); stroke-width: 1.2; }
+  .d-chip { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .d-group { fill: var(--muted); font: 600 11px system-ui, sans-serif; letter-spacing: 0.08em; }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  /* the diagram */
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-ext { fill: var(--ext-bg); stroke: var(--line); stroke-width: 1.5; }
+  .d-title { fill: var(--fg); font: 600 14px system-ui, sans-serif; }
+  .d-num { fill: var(--accent); font: 600 12px system-ui, sans-serif; }
+  .d-text { fill: var(--fg); font: 12px system-ui, sans-serif; }
+  .d-sub { fill: var(--muted); font: 11.5px system-ui, sans-serif; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .d-head { fill: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Proposed capabilities</h1>
+<p class="lede">What horizon promises, in two layers. The foundation is what the server, its tools and
+its database roles guarantee to every caller. The features are what the app builds on that
+foundation, starting with the Ask tabs.</p>
+<p class="stamp">Written 2026-10-31 against <code>main</code> at <code>286a3a43</code>. A proposal for
+the owner to rule on, not a decision. Rows marked in place describe the code today, and rows marked
+proposed are not built or not ruled. Where this page and a decision or
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/AGENTS.md">AGENTS.md</a> disagree, they win. Companion to
+<a href="architecture.html">architecture.html</a>; the concrete tool and page inventory is the
+parity audit, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/findings/2026-10-30-tool-parity/README.md"><code>findings/2026-10-30-tool-parity/</code></a>.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#why">Why a capability list</a>
+  <a href="#foundation"><strong>Part A. The foundation</strong></a>
+  <a href="#path">A request's path</a>
+  <a href="#identity">1. Knowing who is asking</a>
+  <a href="#authorize">2. Deciding what they may do</a>
+  <a href="#protect">3. Reaching production without exposing it</a>
+  <a href="#fair">4. Fair use and cost</a>
+  <a href="#trust">5. Answers you can trust</a>
+  <a href="#reach">6. Reaching every assistant</a>
+  <a href="#writes">7. Assistants that act, safely</a>
+  <a href="#record">8. Keeping the record</a>
+  <a href="#features"><strong>Part B. Features built on it</strong></a>
+  <a href="#ask">9. The Ask tabs</a>
+  <a href="#others">10. The other features</a>
+  <a href="#inherit">11. What a new feature inherits and declares</a>
+  <a href="#rulings">What the owner would rule on</a>
+</nav>
+
+<h2 id="why">Why a capability list</h2>
+<p>A feature is the checklist page, the Ask tab or the <code>draft_edit</code> tool. A capability is a
+guarantee that holds across every feature, such as "we rate-limit each caller", "features open by
+role" or "the server reads production without exposing it". A new feature inherits the
+capabilities without extra code, and a refactor must not lose any of them.</p>
+<figure>
+<svg viewBox="0 0 1060 250" role="img" aria-labelledby="layers-title layers-desc">
+  <title id="layers-title">Features on top of the foundation</title>
+  <desc id="layers-desc">Six boxes on top: the Ask tab on a call, the Ask tab on a proposal, the
+    requirements chat, the checklist drafter, the draft check and reviews, and a person's own
+    assistant over /mcp. All six stand on one wide box, the foundation, which lists its eight
+    families.</desc>
+  <defs>
+    <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+  <text x="10" y="18" class="d-group">PART B · FEATURES</text>
+  <rect x="10" y="28" width="160" height="72" rx="8" class="d-feat"/>
+  <text x="22" y="52" class="d-title">Ask on a call</text>
+  <text x="22" y="72" class="d-text">Discover, one call</text>
+  <text x="22" y="89" class="d-sub">and its other years</text>
+  <rect x="186" y="28" width="160" height="72" rx="8" class="d-feat"/>
+  <text x="198" y="52" class="d-title">Ask on a proposal</text>
+  <text x="198" y="72" class="d-text">the proposal's</text>
+  <text x="198" y="89" class="d-sub">checklist and drafts</text>
+  <rect x="362" y="28" width="160" height="72" rx="8" class="d-feat"/>
+  <text x="374" y="52" class="d-title">Requirements chat</text>
+  <text x="374" y="72" class="d-text">UVM's rules,</text>
+  <text x="374" y="89" class="d-sub">cited passages</text>
+  <rect x="538" y="28" width="160" height="72" rx="8" class="d-feat"/>
+  <text x="550" y="52" class="d-title">Checklist drafter</text>
+  <text x="550" y="72" class="d-text">a call's checklist,</text>
+  <text x="550" y="89" class="d-sub">drafted once</text>
+  <rect x="714" y="28" width="160" height="72" rx="8" class="d-feat"/>
+  <text x="726" y="52" class="d-title">Draft check</text>
+  <text x="726" y="72" class="d-text">panel, reviews,</text>
+  <text x="726" y="89" class="d-sub">Discover match</text>
+  <rect x="890" y="28" width="160" height="72" rx="8" class="d-ext"/>
+  <text x="902" y="52" class="d-title">Your own assistant</text>
+  <text x="902" y="72" class="d-text">over /mcp,</text>
+  <text x="902" y="89" class="d-sub">the same tools</text>
+  <path d="M90 102 L90 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <path d="M266 102 L266 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <path d="M442 102 L442 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <path d="M618 102 L618 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <path d="M794 102 L794 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <path d="M970 102 L970 138" class="d-arrow" marker-end="url(#ah2)"/>
+  <rect x="10" y="140" width="1040" height="100" rx="10" class="d-base"/>
+  <text x="24" y="162" class="d-group">PART A · THE FOUNDATION: THE SERVER, ITS TOOLS, ITS DATABASE ROLES</text>
+  <rect x="24" y="174" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="36" y="192" class="d-text">1. Knowing who is asking</text>
+  <rect x="280" y="174" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="292" y="192" class="d-text">2. Deciding what they may do</text>
+  <rect x="536" y="174" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="548" y="192" class="d-text">3. Production, never exposed</text>
+  <rect x="792" y="174" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="804" y="192" class="d-text">4. Fair use and cost</text>
+  <rect x="24" y="206" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="36" y="224" class="d-text">5. Answers you can trust</text>
+  <rect x="280" y="206" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="292" y="224" class="d-text">6. Reaching every assistant</text>
+  <rect x="536" y="206" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="548" y="224" class="d-text">7. Assistants that act, safely</text>
+  <rect x="792" y="206" width="246" height="26" rx="5" class="d-chip"/>
+  <text x="804" y="224" class="d-text">8. Keeping the record</text>
+</svg>
+<figcaption>A person's own assistant sits beside the app's features, not inside them. It calls the
+same tools over <code>/mcp</code> that the Ask tabs call in process, and the foundation holds for both.</figcaption>
+</figure>
+<div class="cards">
+  <div class="card"><h3>36</h3><p>foundation capabilities in eight families: 30 <span class="tag yes">in place</span>, 3 <span class="tag part">partial</span>, 3 <span class="tag prop">proposed</span></p></div>
+  <div class="card"><h3>2</h3><p>Ask tabs, with 11 capabilities between them: 10 <span class="tag yes">in place</span>, 1 <span class="tag prop">proposed</span></p></div>
+  <div class="card"><h3>6</h3><p>other features built on the same foundation, each a model surface of its own</p></div>
+</div>
+<div class="note"><p>Rows marked <span class="watch" style="display:inline">⚑ tool-layer plan</span> are
+ones that the planned simplification of the tool layer touches (the amendment to decision 0023,
+under review). That plan must carry each of them across unchanged.</p></div>
+
+<h2 id="foundation" class="part">Part A. The foundation</h2>
+<p>Most of the foundation belongs to the whole app, not only to the MCP server. Sign-in, roles, the
+party rule, the tiers, the spend caps and the history hold for a page in the browser as much as for
+an assistant. A few rows belong to the tools alone: one address, old names that still answer, the
+reply shape, lanes, and code that never sees a person.</p>
+
+<h2 id="path">A request's path</h2>
+<p>Every request, from a browser, a person's assistant or a service, passes the same five
+checkpoints. The families below follow them, then add what the system keeps.</p>
+<figure>
+<svg viewBox="0 0 1060 190" role="img" aria-labelledby="path-title path-desc">
+  <title id="path-title">The checkpoints a request passes</title>
+  <desc id="path-desc">Five boxes left to right: identify the caller, authorize by role and relation,
+    reach data through a role scoped to its tier, charge the caller's budget, answer with sources
+    and lanes.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+  <rect x="10" y="20" width="185" height="150" rx="10" class="d-box"/>
+  <text x="24" y="44" class="d-num">1 · IDENTIFY</text>
+  <text x="24" y="66" class="d-title">Who is asking?</text>
+  <text x="24" y="90" class="d-text">a person (session)</text>
+  <text x="24" y="108" class="d-text">their assistant (hzp_)</text>
+  <text x="24" y="126" class="d-text">a machine (svc_)</text>
+  <text x="24" y="152" class="d-sub">else: refused, 401</text>
+
+  <rect x="222" y="20" width="185" height="150" rx="10" class="d-box"/>
+  <text x="236" y="44" class="d-num">2 · AUTHORIZE</text>
+  <text x="236" y="66" class="d-title">May they do this?</text>
+  <text x="236" y="90" class="d-text">by role: roles.ts</text>
+  <text x="236" y="108" class="d-text">by relation: access.ts</text>
+  <text x="236" y="126" class="d-text">by switch: flags</text>
+  <text x="236" y="152" class="d-sub">else: refused, before a read</text>
+
+  <rect x="434" y="20" width="185" height="150" rx="10" class="d-box"/>
+  <text x="448" y="44" class="d-num">3 · REACH DATA</text>
+  <text x="448" y="66" class="d-title">Through which door?</text>
+  <text x="448" y="90" class="d-text">Low: role mcp</text>
+  <text x="448" y="108" class="d-text">Moderate: role web_app</text>
+  <text x="448" y="126" class="d-text">read-only transaction</text>
+  <text x="448" y="152" class="d-sub">the tier is the schema</text>
+
+  <rect x="646" y="20" width="185" height="150" rx="10" class="d-box"/>
+  <text x="660" y="44" class="d-num">4 · CHARGE</text>
+  <text x="660" y="66" class="d-title">Can they afford it?</text>
+  <text x="660" y="90" class="d-text">rate bucket per account</text>
+  <text x="660" y="108" class="d-text">model spend: daily cap</text>
+  <text x="660" y="126" class="d-text">and per-account allowance</text>
+  <text x="660" y="152" class="d-sub">else: 429, retry later</text>
+
+  <rect x="858" y="20" width="192" height="150" rx="10" class="d-box"/>
+  <text x="872" y="44" class="d-num">5 · ANSWER</text>
+  <text x="872" y="66" class="d-title">Can they trust it?</text>
+  <text x="872" y="90" class="d-text">one reply shape</text>
+  <text x="872" y="108" class="d-text">quotes, sources, dates</text>
+  <text x="872" y="126" class="d-text">lanes: what fell back</text>
+  <text x="872" y="152" class="d-sub">logs: no person, no query</text>
+
+  <path d="M195 95 L220 95" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M407 95 L432 95" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M619 95 L644 95" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M831 95 L856 95" class="d-arrow" marker-end="url(#ah)"/>
+</svg>
+<figcaption>The order matters: a caller with no account is refused an account tool before the
+database is touched, and a call over budget is refused before any work is done.</figcaption>
+</figure>
+
+<!-- 1 -->
+<h2 id="identity">1. Knowing who is asking</h2>
+<p class="claim">Every request has a known caller, and a person, their assistant and a machine are
+never confused for one another.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">One sign-in per person</td>
+      <td>People sign in with their UVM NetID. A password lane exists only for the synthetic personas of the development databases and the box-local synthetic copy, and it can never reach a NetID account or a uvm.edu address.</td>
+      <td class="how"><code>auth.ts</code>, <code>cas.ts</code>; a database CHECK (migration 0007). NetID sign-in is on where the operator set <code>CAS_BASE_URL</code>.</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">An assistant acts as its person</td>
+      <td>A person mints a token in Settings and hands it to their own assistant. The assistant then sees what that person sees. The app re-reads the account on every call, so a role change or a revoked token takes effect at once.</td>
+      <td class="how"><code>hzp_</code> tokens, minted only from a live session (decision 0006, addendum 2026-10-08, item 6); <code>guards.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Machines are not people</td>
+      <td>A service (the eval gate, another system) gets an operator-minted token with no person behind it, and reaches published data only.</td>
+      <td class="how"><code>svc_*</code> names in <code>mcp.tokens</code>, a CHECK keeps people out (migration 0038); decision 0023, items 10 and 11</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan (parked: one token kind)</span></td></tr>
+    <tr><td class="cap">Support without impersonation</td>
+      <td>An admin can see the app as another account does, to help that person, but cannot act as them. The view is read-only, lasts at most an hour, is bound to the admin's session and is logged, and Microsoft is refused while it lasts.</td>
+      <td class="how"><code>view-as.ts</code>, <code>app.view_as_log</code>; hooks refuse every write</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 2 -->
+<h2 id="authorize">2. Deciding what they may do</h2>
+<p class="claim">What a person sees depends on their role, and inside a proposal on their
+relationship to it. Each rule is written once.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Role-gated features</td>
+      <td>Features open by role. The roles are PI, pre-award, research development, admin and leadership. A PI starts proposals; staff see the queue; leadership reads aggregates and writes nothing. The sidebar, the pages and the server all read the same table.</td>
+      <td class="how"><code>roles.ts</code> <code>ACTOR_ACTIONS</code>, the only file that names a role besides <code>access.ts</code> (<code>tests/rules.test.ts</code>)</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Relationship-gated records</td>
+      <td>A proposal is visible because of who you are to it, such as its owner, a team member, the SPA officer it was routed to, or the RD staff who claimed it. Anyone else gets "not found", not "forbidden".</td>
+      <td class="how">the party rule, one copy: <code>proposals/access.ts</code> (decision 0011; decision 0023, item 2)</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Assistants get less than people</td>
+      <td>A person's assistant reaches less than the person does. It sees only the proposals the person is a party to, with no pools and no admin reach, and never names, emails, or a proposal's free-text form fields.</td>
+      <td class="how"><code>use_via_agent</code> in <code>access.ts</code>; decision 0006, addendum 2026-10-08, items 1 to 3</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Features ship dark</td>
+      <td>We build a risky capability behind a switch and turn it on with a setting, not a deploy. Assistant writes, reviewers' text and NetID sign-in work this way. A switched-off tool is not even listed.</td>
+      <td class="how"><code>AGENT_DRAFT_WRITES</code>, <code>AGENT_REVIEWERS_TEXT</code>, <code>CAS_BASE_URL</code>; <code>servedTools</code> reads the switches in one place</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan</span></td></tr>
+    <tr><td class="cap">Data access is a recorded grant</td>
+      <td>Nobody reaches the Moderate schemas by belonging to a group. A person gets in through a grant an admin records, with a reason, that can be revoked.</td>
+      <td class="how"><code>governance.access_grants</code>; decision 0003, item 7; decision 0006</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 3 -->
+<h2 id="protect">3. Reaching production without exposing it</h2>
+<p class="claim">The tools answer from production's real data, and nothing travels further than
+its tier allows: not in a reply, not in a log, not in development.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">The tier is the schema</td>
+      <td>Every table's data class (<span class="tag low">Low</span> or <span class="tag mod">Moderate</span>) is the schema it lives in, and each process connects as a role that holds grants on its tier only. The database refuses, not the code.</td>
+      <td class="how">roles <code>mcp</code> (Low only), <code>web_app</code>, <code>pipeline</code>; <code>db/roles.sql</code>; <code>make tiers-check</code>; decision 0003</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan (parked: one connection)</span></td></tr>
+    <tr><td class="cap">Published-data code never sees a person</td>
+      <td>The code that answers from public data runs without knowing who asked. No account id, role, unit, email or token reaches it, and it never reads an upload. The person-specific part of an answer is added afterwards, in the app.</td>
+      <td class="how"><code>tests/tools/low-stores.test.ts</code>; decision 0023, items 3 and 4</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: becomes the PublicCtx type</span></td></tr>
+    <tr><td class="cap">Staff-only text stays inside</td>
+      <td>Notes written for staff never reach an outside assistant (the corpus scope note) or a PI (staff notes on a proposal).</td>
+      <td class="how">the caller's audience; <code>tests/tools/scope-note.test.ts</code>; ruling L, 2026-10-12; <code>access.ts</code> for staff notes</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: enforced by audience, not by stripping</span></td></tr>
+    <tr><td class="cap">Read-only unless it must write</td>
+      <td>Every tool call reads in a READ ONLY transaction. The one write runs after it, on its own connection, so a slow Microsoft call never holds a database connection.</td>
+      <td class="how"><code>callModerate</code> and <code>Deferred</code> (<code>tool-runtime/registry.ts</code>)</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan</span></td></tr>
+    <tr><td class="cap">Logs that cannot track people</td>
+      <td>A log line names the caller's class (anonymous, token, app) and the tool, never the account, the token or any part of its digest, the arguments, or a database error's message, which can quote the query.</td>
+      <td class="how"><code>tools/caller.ts</code>, <code>errorName</code>; decision 0003's addendum; decision 0012, item 5</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">No credential stored in the clear</td>
+      <td>Session and assistant tokens are stored as hashes, so a dump of the database holds no live credential. Microsoft tokens are sealed with a key only the app holds.</td>
+      <td class="how"><code>app.sessions.token_sha256</code> and its CHECK; <code>mcp.tokens</code> digests; the sealed Graph tokens</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Development never holds real people</td>
+      <td>Outside production, the Moderate schemas hold synthetic personas only. Developers and agents work on real public data and fake people.</td>
+      <td class="how">decision 0006, item 5; seed personas; settings refuse production's database</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 4 -->
+<h2 id="fair">4. Fair use and cost</h2>
+<p class="claim">No caller can take the box down or run up the bill, and each pays from their own
+budget.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Rate limits per caller</td>
+      <td>Each account has a bucket (120 units, refilled at 2 a second), and an expensive tool costs more than a cheap one. Each account also has a few in-flight slots, and a request body is capped at 4 MB. Callers behind IT's proxy cannot be told apart by IP, so limits key on the account, never the address.</td>
+      <td class="how"><code>lib/server/rate-limit.ts</code>, <code>tool-runtime/limiter.ts</code>, <code>mcp/endpoint.ts</code>; decision 0023, item 9</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: the in-app charge must survive</span></td></tr>
+    <tr><td class="cap">One budget, every door</td>
+      <td>A tool call costs the same whether it came from the person's assistant or the platform's own Ask tab: both draw on the same account bucket.</td>
+      <td class="how"><code>toolCaller({charge})</code> in <code>tool-runtime/call.ts</code>; decision 0023, item 9</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: not yet carried</span></td></tr>
+    <tr><td class="cap">Model spend is capped and ledgered</td>
+      <td>Every paid model call is a row with its cost. The app has one daily cap, each account an allowance ($10 over a rolling window), and the Jev stand-in its own global daily cap. Over a cap, the call is refused before it is made.</td>
+      <td class="how"><code>app.model_calls</code>, <code>model/ledger.ts</code>, <code>APP_MODEL_DAILY_MICROS</code>, <code>ACCOUNT_ALLOWANCE_MICROS</code>; <code>mcp.llm_spend</code>; decision 0006, addendum 2026-10-15</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Who pays when an assistant starts a model run</td>
+      <td>Today no assistant can start one (no agent starts a checklist draft). If assistants may, a rule says whose allowance it draws on and whether the reply is "started, read again later".</td>
+      <td class="how">decision 0020 ("no agent starts a draft"); the parity audit's candidates 1 and 8</td>
+      <td class="st"><span class="tag prop">proposed</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 5 -->
+<h2 id="trust">5. Answers you can trust</h2>
+<p class="claim">Every answer says where it came from and how it was made, and a degraded answer
+says so.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Every claim carries its source</td>
+      <td>A rule comes with the document, its URL and the revision date UVM printed; an eligibility verdict with the funder's verbatim quote and "extracted by &lt;model&gt;, judged by rule"; a checklist item with the sentence it rests on.</td>
+      <td class="how">the tool contracts; the marts' dbt contracts</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Degradation is never silent</td>
+      <td>When a model behind a search is down and a fallback answers, the reply says which stage fell back. A page labels a degraded answer; a document tool says which half answered.</td>
+      <td class="how"><code>lanes</code> on every search and match; AGENTS.md</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">One reply shape everywhere</td>
+      <td>Every tool answers <code>{status, message, ...}</code>: <code>ok</code>, <code>truncated</code>, <code>not_found</code> or <code>refused</code>, with a sentence saying what to do next. An assistant learns the shape once.</td>
+      <td class="how"><code>lib/tools/envelope.ts</code>; decision 0022, item 7</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Replies a program can check</td>
+      <td>Beside the text, a reply also carries its data in a declared schema, so a client can validate it rather than parse prose.</td>
+      <td class="how">MCP <code>outputSchema</code> and <code>structuredContent</code>: the schemas exist, but are not sent</td>
+      <td class="st"><span class="tag part">partial</span><span class="watch">⚑ tool-layer plan, step 6</span></td></tr>
+    <tr><td class="cap">A broken part stays local</td>
+      <td>If one group of tools cannot start (a mart missing after a failed dbt build), its tools answer "refused, because …", the rest of the app goes on, and the group is tried again a minute later.</td>
+      <td class="how">decision 0023, item 7; <code>tests/tools-runtime.test.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan</span></td></tr>
+    <tr><td class="cap">Changes are measured, not eyeballed</td>
+      <td>A change to retrieval, a model lane or the checklist drafter runs a benchmark before it merges, and a number is cited only with a recorded run.</td>
+      <td class="how"><code>evals/</code>, MLflow; decision 0018; AGENTS.md "Cite a number". No benchmark yet measures how an assistant picks among tools.</td>
+      <td class="st"><span class="tag part">partial</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 6 -->
+<h2 id="reach">6. Reaching every assistant</h2>
+<p class="claim">A person can use horizon from the assistant they already use, and gets the same
+tools the platform's own assistant has.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Any assistant, one address</td>
+      <td>Claude Code, Claude Desktop or Cursor connect to one endpoint, on campus or the VPN, speaking either era of the MCP protocol. Claude Code installs it as a plugin with the user-facing skills.</td>
+      <td class="how"><code>/mcp</code>; <code>plugin/</code>; <code>tests/mcp-versions.test.ts</code>; decision 0023, item 12</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">The platform's assistant and yours use the same tools</td>
+      <td>The Ask tabs on a call and on a proposal call the same tools, with the same words, that an outside assistant calls; only the scope is fixed by the page.</td>
+      <td class="how"><code>documentsChatTools</code>; decision 0022</td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: onto one registry</span></td></tr>
+    <tr><td class="cap">Renames don't break callers</td>
+      <td>A renamed tool still answers under its old name, unlisted, for at least 30 days.</td>
+      <td class="how">decision 0022, item 12; <code>tests/tool-aliases.test.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Whatever the platform does, a tool does</td>
+      <td>Every action on the platform is marked either reachable by a tool or exempt, with a reason, and a test holds the table. Today 14 of 125 actions have a tool and 33 are exempt; finding funding is covered, running a proposal is not.</td>
+      <td class="how">decision 0023, item 15; the parity audit</td>
+      <td class="st"><span class="tag part">partial</span></td></tr>
+    <tr><td class="cap">An assistant can discover all it may read</td>
+      <td>From the tools alone, an assistant can find every id it may pass: today it can't list the funder guides, so it can't find a <code>guide_id</code>.</td>
+      <td class="how">the tool-layer plan's parked item (c)</td>
+      <td class="st"><span class="tag prop">proposed</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 7 -->
+<h2 id="writes">7. Assistants that act, safely</h2>
+<p class="claim">An assistant can change things only where a ruling allows, one narrow change at a
+time, as its person, and never over someone else's work.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Narrow, checked writes</td>
+      <td>The one write today changes one section of a Markdown draft the platform made, as the person's own Microsoft account, when the person asked. It names the version it read and is refused if the section changed since, and the person's client approves each call.</td>
+      <td class="how"><code>draft_edit</code>; decision 0006's write addendum (2026-10-26, as amended 2026-10-27)</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Writes are allow-listed</td>
+      <td>Nothing writes unless a ruling lists it. A new write tool amends decision 0006 first and names its prompt-injection reasoning: a planted instruction in served text could otherwise steer it.</td>
+      <td class="how">decision 0006, addendum 2026-10-08, item 2 and write addendum item 1</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Assistants run a proposal end to end</td>
+      <td>Start a proposal for a call, tick and date its tasks, move it to SPA, all from the person's assistant. Each is a write tool waiting on its own ruling.</td>
+      <td class="how">the parity audit's ranked candidates (<code>proposals_create</code>, <code>checklist_update</code>, …)</td>
+      <td class="st"><span class="tag prop">proposed</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 8 -->
+<h2 id="record">8. Keeping the record</h2>
+<p class="claim">What happened stays answerable later: what we fetched, who changed what, and
+whether an assistant did it.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">History is never pruned</td>
+      <td>Every version of every record the pipeline fetched is kept, so a past answer can be traced to the data it came from.</td>
+      <td class="how"><code>raw</code>; decision 0002</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Every change has an author</td>
+      <td>A proposal's history names who moved it, including an admin acting through a view and an assistant's write into a draft, which History and Updates show.</td>
+      <td class="how"><code>proposal_events</code> (with <code>via_*</code> and <code>draft_written</code>); decision 0006's write addendum, item 3</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<h2 id="features" class="part">Part B. Features built on the foundation</h2>
+<p>A feature is a page, usually with a model behind it. It inherits all of part A and adds three
+things of its own: what the model is told, which tools it may call, and how much one use may cost.
+Each model feature is a named surface with its own addendum to decision 0006, and every model call
+it makes is a row in <code>app.model_calls</code> under that name.</p>
+
+<!-- 9 -->
+<h2 id="ask">9. The Ask tabs</h2>
+<p class="claim">A chat about the thing on the page. It starts with that thing's context and reads
+with the same tools a person's own assistant uses.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Tab</th><th>Who may ask</th><th>What the first message carries</th><th>Tools</th><th>Surface</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">On a call (Discover)</td>
+      <td>anyone signed in</td>
+      <td>the call's title and facts, and a description of its other years, with no ids</td>
+      <td><code>documents_list</code>, <code>documents_search</code>, <code>documents_read</code>, over the call and its other years</td>
+      <td><code>call_chat</code></td></tr>
+    <tr><td class="cap">On a proposal</td>
+      <td>a party to the proposal</td>
+      <td>a map of the proposal (its checklist and each deliverable's draft outline), and the item the person pinned with Discuss</td>
+      <td><code>checklist_read</code>, <code>critiques_list</code>, <code>draft_read</code>, and the three documents tools over the proposal and its linked call</td>
+      <td><code>proposal_chat</code></td></tr>
+  </tbody>
+</table>
+</div>
+<div class="scroll">
+<table>
+  <thead><tr><th>Capability</th><th>What it means</th><th>How it holds</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">The page sets the scope</td>
+      <td>The server fills the call or the proposal into every tool input. The model's tool schemas have no scope argument, so the model never sees or passes an id and cannot reach another call or proposal.</td>
+      <td class="how"><code>FixedScope</code> in <code>tools/documents/moderate.ts</code>; <code>proposal_id</code> removed from the model's schemas in <code>proposals/proposal-chat.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan</span></td></tr>
+    <tr><td class="cap">It starts with context</td>
+      <td>Before the first model call, the server reads what the page is about and puts it on the first message. On a proposal, it reads the checklist and each draft's outline as the asker, with no model call.</td>
+      <td class="how"><code>proposals/chat-map.ts</code>; <code>renderFacts</code> for a call; decision 0006, addendum 2026-10-28 (chat edits), items 2 and 3</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Ask about one item</td>
+      <td>The Discuss button pins a checklist item. The server reads its draft section and the sponsor's passage by id before the model starts.</td>
+      <td class="how"><code>preRead</code>; the same addendum, item 4</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">It reads as you</td>
+      <td>The proposal tab's tools run as the asker, through the party rule and the asker's own Microsoft connection. The tab sees nothing the person could not open.</td>
+      <td class="how"><code>runTool</code> and <code>callModerate</code>; the same addendum, items 2 and 5</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">The same tools as your own assistant</td>
+      <td>The tabs call the tools an outside assistant calls, with the same descriptions. A fix to a tool fixes both.</td>
+      <td class="how">decision 0022; <code>documentsChatTools</code>, <code>AGENT_TOOLS</code></td>
+      <td class="st"><span class="tag yes">in place</span><span class="watch">⚑ tool-layer plan: onto one registry</span></td></tr>
+    <tr><td class="cap">Read-only, and wary of planted text</td>
+      <td>Neither tab holds a write tool. The system prompt tells the model that a tool's text is material to read and never an instruction, so text planted in a document can only steer the answer the asker reads.</td>
+      <td class="how"><code>CALL_CHAT_SYSTEM</code> in <code>discover/call-chat.ts</code>; <code>proposals/proposal-chat.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">The call tab knows nothing about you</td>
+      <td>A turn on a call carries no account, name, proposal, bookmark or referral. The tab says what the documents state about eligibility and never whether the asker qualifies.</td>
+      <td class="how"><code>discover/call-chat.ts</code>; decision 0006, addendum 2026-10-27, ruled 2026-10-28</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">A turn has a ceiling</td>
+      <td>A turn makes at most 8 model calls, each sending at most 140,000 characters and writing at most 8,000 tokens. An account runs one turn at a time, inside the shared daily cap. The worst turn on Sonnet 5.5 costs about $1.54.</td>
+      <td class="how"><code>model/chat-loop.ts</code>; the arithmetic in <code>proposals/proposal-chat.ts</code>; decision 0006, addendum 2026-10-26, item 6</td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">Nothing kept but the cost</td>
+      <td>The app never stores or logs the question, the answer or a tool's text. The thread lives in the page and ends when the page closes. Each model call leaves one <code>app.model_calls</code> row, and the turn's MLflow trace holds ids and numbers only.</td>
+      <td class="how">decision 0006, addendum 2026-10-26, item 5; <code>model/chat-trace.ts</code></td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">It shows what it read</td>
+      <td>While a turn runs, the proposal tab lists in words what it has read so far, such as a section or a document, and then the answer.</td>
+      <td class="how"><code>readLabel</code> in <code>proposals/chat-map.ts</code>; <code>ProposalChatFrame</code></td>
+      <td class="st"><span class="tag yes">in place</span></td></tr>
+    <tr><td class="cap">UVM's policies in the same chat</td>
+      <td>Today neither tab can read UVM's own rules, so "what does UVM require for cost share on this call?" gets the funder's half only, and the person has to switch to the requirements chat for UVM's half. Giving both tabs <code>uvm_requirements_search</code> and <code>uvm_requirements_read</code> would answer both halves in one turn, each cited to its own source.</td>
+      <td class="how">Needs an addendum for each surface's tool list and a new cost bound. Also needs a ruling on the audience the tab reads as, because the app audience sees the staff's scope note, and the system prompt must keep UVM's rules apart from the funder's.</td>
+      <td class="st"><span class="tag prop">proposed</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 10 -->
+<h2 id="others">10. The other features</h2>
+<p class="claim">The same foundation carries every model feature in the app. Each row names its
+surface, the name its calls carry in the ledger.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Feature</th><th>What it does</th><th>Surface</th><th>Leans most on</th></tr></thead>
+  <tbody>
+    <tr><td class="cap">Requirements chat</td>
+      <td>Answers a question about UVM's rules from searched passages, numbered and cited. It keeps the asker's own turns and threads, streams the answer, and a reconnect never pays twice.</td>
+      <td><code>requirements_chat</code></td>
+      <td class="how">4. fair use and cost; 5. answers you can trust</td></tr>
+    <tr><td class="cap">Checklist drafter</td>
+      <td>Drafts a call's checklist once from its own documents and the funder guides it inherits, then copies it into each proposal that links the call. Any change to it runs the checklist benchmark first.</td>
+      <td><code>call_checklist_draft</code>, <code>guide_checklist_draft</code>, <code>checklist_draft</code></td>
+      <td class="how">4; 5, sources and measurement</td></tr>
+    <tr><td class="cap">Draft check and mock panel</td>
+      <td>Reads a draft and lists findings the team accepts or dismisses; a mock panel reviews it as a funder's reviewers would.</td>
+      <td><code>draft_check</code>, <code>panel_review</code></td>
+      <td class="how">2. deciding what they may do; 4</td></tr>
+    <tr><td class="cap">Reviews</td>
+      <td>Compares a draft with the earlier attempt's critiques, and places a reviewer's point in the sections the attempt submitted.</td>
+      <td><code>reviews_compare</code>, <code>critique_placement</code> (Jev)</td>
+      <td class="how">2; 4</td></tr>
+    <tr><td class="cap">Discover search and match</td>
+      <td>Ranks open calls for a text or for a person's papers. When the rerank lane is down, Jev re-ranks and the page says so.</td>
+      <td><code>discover_rerank</code> (Jev)</td>
+      <td class="how">4; 5, lanes</td></tr>
+    <tr><td class="cap">Get Started and the Overview</td>
+      <td>Drafts the proposal fields that the call's record cannot fill, and proposes an uploaded solicitation's dates, amounts and synopsis for the Overview.</td>
+      <td><code>prefill_draft</code>, <code>solicitation_facts</code></td>
+      <td class="how">4</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- 11 -->
+<h2 id="inherit">11. What a new feature inherits and declares</h2>
+<p>The two lists below are the recipe for the next feature, such as a third Ask tab.</p>
+<div class="cards">
+  <div class="card"><h3 style="font-size:1.05rem">It inherits</h3>
+    <ul>
+      <li>sign-in, roles and the party rule</li>
+      <li>access to each tier through that tier's role</li>
+      <li>the account's rate bucket, the daily cap and the allowance</li>
+      <li>a ledger row per model call</li>
+      <li>the tools, with their sources, their lanes and one reply shape</li>
+      <li>history events for anything it changes</li>
+    </ul></div>
+  <div class="card"><h3 style="font-size:1.05rem">It declares</h3>
+    <ul>
+      <li>a surface name and its addendum to decision 0006</li>
+      <li>its tools, by name from the one registry, and the scope the page fixes</li>
+      <li>its cost ceiling, with the arithmetic</li>
+      <li>what it stores, which by default is the ledger row alone</li>
+      <li>its benchmark, if it drafts, ranks or judges</li>
+    </ul></div>
+</div>
+
+<h2 id="rulings">What the owner would rule on</h2>
+<p>The proposed rows and the open questions behind the partial ones, in one place. Each is its
+own decision, and this page decides none of them.</p>
+<ol>
+  <li><strong>UVM's policies in the Ask tabs</strong> (section 9). Whether both tabs get
+    <code>uvm_requirements_search</code> and <code>uvm_requirements_read</code>, with a new cost
+    ceiling, and which audience a tab reads as.</li>
+  <li><strong>Assistants that start model runs</strong> (family 4): whether they may, and whose
+    allowance pays. Today decision 0020 says no.</li>
+  <li><strong>Assistants that run a proposal end to end</strong> (family 7): which write tools, in what
+    order. The parity audit ranks <code>proposals_create</code>, <code>proposals_read</code> and
+    <code>checklist_update</code> first.</li>
+  <li><strong>Discoverability</strong> (family 6): a way to list funder guides, before deciding whether
+    guides become their own tool family.</li>
+  <li><strong>Structured replies</strong> (family 5): whether the advertised schema is loose (adding a
+    field stays free) or strict.</li>
+  <li><strong>Which audience a signed-in assistant is</strong> (family 3): it must not see staff-only
+    text, but does see eligibility verdicts. This is the one tier choice inside the tool-layer
+    plan.</li>
+  <li><strong>Parked, each later and alone:</strong> one database connection for the app instead of
+    two (it would move the "database refuses" guarantee for services into code), and one token
+    kind for people and machines.</li>
+</ol>
+
+</main>
+</body>
+</html>

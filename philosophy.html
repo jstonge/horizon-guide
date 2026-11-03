@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: tools, skills and evals first</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --code-bg: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --code-bg: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  .claim { font-size: 1.05rem; color: var(--muted); font-style: italic; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td.name { font-weight: 600; min-width: 10em; }
+  .note { border-left: 3px solid var(--accent); background: var(--panel); padding: 10px 14px; margin: 16px 0; border-radius: 0 6px 6px 0; }
+  .note p { margin: 4px 0; }
+  ol.layers > li { margin: 14px 0; }
+  ol.layers > li > strong { display: block; }
+  .more { font-size: 0.9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Tools, skills and evals first</h1>
+<p class="lede">How horizon is built, in what order, and why that order pays off over time,
+compared with the Codec prototype, which builds the same product one feature at a time.</p>
+<p class="stamp">Written 2026-11-02 against horizon's <code>main</code> at <code>b1898229</code> and
+the <code>CODEC-dev</code> repository at <code>370b99d</code>. A position for
+discussion, not a decision. Where it disagrees with <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/AGENTS.md">AGENTS.md</a>
+or a decision, those win. Read <a href="architecture.html">Architecture</a> first.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#two">1. Two ways to build the same product</a>
+  <a href="#order">2. horizon's order</a>
+  <a href="#codec">3. The Codec prototype</a>
+  <a href="#side">4. Side by side</a>
+  <a href="#compounds">5. Why the order compounds</a>
+  <a href="#cost">6. What it costs</a>
+  <a href="#borrow">7. What horizon takes from Codec</a>
+  <a href="#open">Open questions</a>
+</nav>
+
+<h2 id="two">1. Two ways to build the same product</h2>
+<p>Both projects want the same thing for UVM. A researcher finds funding and prepares a proposal,
+and SPA and research development staff help. The projects differ in where they start.</p>
+<p><strong>Feature first</strong> starts from a page. A mockup shows what a person should see, and
+the team builds the feature to match it, writing the data access, the prompt and the model call for
+that page. A feature is done when its page works.</p>
+<p><strong>Tools, skills and evals first</strong> starts from the record. The data comes first,
+then tools that answer questions over it, then the method for using the tools, then a way to
+measure whether the answers are good. A page comes last and calls the same tools anyone else
+would. A feature is done when its tools pass their tests and its model's work passes its
+benchmark.</p>
+<p>Neither is wrong at every stage. Feature first is how a prototype gets its first users. This
+page asks which one still works after a year of changes.</p>
+
+<h2 id="order">2. horizon's order</h2>
+<ol class="layers">
+  <li><strong>The data.</strong> There is one record, kept whole. Every source lands in the
+    warehouse with its history, and where the data lives decides who may see it, not each page.
+    Everything above reads from it (<a href="data-sources.html">Data sources</a>).</li>
+  <li><strong>Tools over it.</strong> Each question worth answering becomes a tool with a stated
+    input and a stated reply, and the reply says which models produced it and which fell back. The
+    app and a person's own assistant call the same tools, so each question has one answer, wherever
+    someone asks it (<a href="tools-skills-mcp.html">Tools, skills, MCP</a>).</li>
+  <li><strong>The method for using them.</strong> We write down once how to get a good answer out of
+    the tools and how far to trust it, as a skill or a workflow, and the app and outside assistants
+    both use it. The rules for quoting UVM's requirements, with their dates and sources, are one
+    skill that the app's chat and Claude Code both read.</li>
+  <li><strong>Measurement.</strong> A benchmark of keyed answers judges a model's work. A change to a
+    prompt, a model or a lane runs on its benchmark before it ships, and we cite a number with the
+    run that produced it (<a href="evaluation.html">Evaluation</a>).</li>
+  <li><strong>The product.</strong> The app comes last and calls the tools. It adds what only a page
+    can add: forms, review, and the conversation between a researcher and the people who help
+    them.</li>
+</ol>
+
+<h2 id="codec">3. The Codec prototype</h2>
+<p>Codec is a web portal organised as named agents, one for each area of the university's work,
+with grants first. Its team builds features one at a time from a design mockup that the people who
+will use them have reviewed.</p>
+<p>The approach has strengths. It shows a whole lifecycle quickly, from a profile to a submitted
+proposal. It runs without a model key, because a local fallback answers in the model's place,
+which makes demos easy. It weighs matches against UVM's strategic priorities, and it keeps cost
+down by choosing a model for each job.</p>
+<p>Each feature calls the model from its own code, with a prompt an admin can change in the
+console. Tests check the code around each call, and nothing measures whether the answers are
+good.</p>
+
+<h2 id="side">4. Side by side</h2>
+<div class="scroll"><table>
+  <thead><tr><th></th><th>Feature first (Codec)</th><th>Tools, skills and evals first (horizon)</th></tr></thead>
+  <tbody>
+    <tr><td class="name">Where a model's work lives</td><td>In each feature</td><td>In a tool that every caller shares</td></tr>
+    <tr><td class="name">Who can use it</td><td>People signed in to the portal</td><td>The portal, and anyone's own assistant</td></tr>
+    <tr><td class="name">Changing a prompt</td><td>An admin edits it live</td><td>Its benchmark runs before it ships</td></tr>
+    <tr><td class="name">When a model is down</td><td>A fallback answers in its place</td><td>The reply says what fell back</td></tr>
+    <tr><td class="name">Knowing an answer is good</td><td>Tests of the code</td><td>Benchmarks of the answers</td></tr>
+    <tr><td class="name">Why things are the way they are</td><td>A running build log</td><td>Dated decisions, one per file</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="compounds">5. Why the order compounds</h2>
+<p>We pay for each layer once, and everything above it uses it. Three changes in horizon show
+this.</p>
+<h3>A fix reaches every caller at once</h3>
+<p>One of the documents tools sent more than an assistant needed. A single change trimmed it
+(<a href="https://gitlab.uvm.edu/codec/horizon/-/merge_requests/227">!227</a>), and the app and
+every outside assistant got the smaller reply together. In a feature-first build, each page would
+have carried its own copy to fix.</p>
+<h3>A benchmark stops a change before anyone sees it</h3>
+<p>Someone tried a new prompt for the checklist drafter. On its benchmark it found fewer of the
+sections a call requires, so it did not ship
+(<a href="https://gitlab.uvm.edu/codec/horizon/-/merge_requests/80">!80</a>). An admin editing it
+live would have sent it to every proposal, and nothing would have shown that the drafts got
+worse.</p>
+<h3>One authority for a number</h3>
+<p>A budget's arithmetic lives in one tool that looks up the rates itself. Every caller gets the
+same totals, and no model copies a rate from one answer into the next.</p>
+<div class="note"><p>In all three, every layer above reuses the work done in a layer. In a
+  feature-first build, only the page it was done for reuses it.</p></div>
+
+<h2 id="cost">6. What it costs</h2>
+<ul>
+  <li><strong>A feature shows later.</strong> A page waits for its tools, and a model's job waits
+    for a way to measure it. A prototype shows a whole lifecycle sooner.</li>
+  <li><strong>More process.</strong> A decision comes before the code, checks run before every
+    change, and a benchmark runs before a prompt change.</li>
+  <li><strong>Harder to start.</strong> A newcomer meets the warehouse and the tools before the app.
+    These pages exist to shorten that.</li>
+  <li><strong>No answer without the model.</strong> horizon says when a model is down instead of
+    answering in its place, so a demo without a key shows less.</li>
+</ul>
+<p>Our assumption is that we pay these costs once per layer, while a feature-first build pays them
+again with every feature and every prompt edit.</p>
+
+<h2 id="borrow">7. What horizon takes from Codec</h2>
+<ul>
+  <li><strong>Its budget engine,</strong> ported and corrected, as horizon's one budget tool.</li>
+  <li><strong>Its mockups,</strong> as a check that a page serves the person it is for. Tools can
+    be right and still answer questions nobody asks.</li>
+  <li><strong>Its strategic priorities.</strong> Should matching weigh them, and how would a
+    benchmark measure that?</li>
+  <li><strong>Its developers already call horizon's tools</strong> while they build, so one tool
+    already serves both projects.</li>
+</ul>
+
+<h2 id="open">Open questions</h2>
+<ul>
+  <li>Should horizon offer a labelled mode without a model key for demos and onboarding, or keep
+    saying when a model is down?</li>
+  <li>Which Codec features would a tools-first build expose as tools first, so that both projects
+    could call them?</li>
+  <li>Should UVM's strategic priorities enter matching, and how would the benchmark key them?</li>
+</ul>
+<p class="more">More: <a href="architecture.html">Architecture</a>, <a href="tools-skills-mcp.html">Tools, skills, MCP</a>, <a href="problems-and-tools.html">Problems first, then tools</a>, <a href="evaluation.html">Evaluation</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0023-one-tool-layer.md">decision 0023 on one tool layer</a>.</p>
+
+</main>
+</body>
+</html>

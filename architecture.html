@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: architecture at a glance</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --ext-bg: #f0f1f4; --code-bg: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --ext-bg: #20242c; --code-bg: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  figure { margin: 24px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; max-width: 80ch; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td:first-child { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; }
+  .tag.low { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--panel); }
+  .card h3 { margin-top: 0; }
+  .card p { margin: 6px 0 0; font-size: 0.95rem; }
+  ol.flow li { margin: 6px 0; }
+  dl.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+  dl.glossary dt { font-weight: 600; }
+  dl.glossary dd { margin: 0; max-width: 70ch; }
+  /* the diagram */
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-ext { fill: var(--ext-bg); stroke: var(--line); stroke-width: 1.5; }
+  .d-low { fill: var(--low-bg); stroke: var(--low); stroke-width: 1.2; }
+  .d-mod { fill: var(--mod-bg); stroke: var(--mod); stroke-width: 1.2; }
+  .d-chip { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .d-title { fill: var(--fg); font: 600 15px system-ui, sans-serif; }
+  .d-sub { fill: var(--muted); font: 12px system-ui, sans-serif; }
+  .d-text { fill: var(--fg); font: 12.5px system-ui, sans-serif; }
+  .d-low-t { fill: var(--low); font: 600 12px system-ui, sans-serif; }
+  .d-mod-t { fill: var(--mod); font: 600 12px system-ui, sans-serif; }
+  .d-group { fill: var(--muted); font: 600 11px system-ui, sans-serif; letter-spacing: 0.08em; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .d-arrow-dash { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .d-head { fill: var(--muted); }
+  .d-label { fill: var(--muted); font: italic 11.5px system-ui, sans-serif; }
+  /* the reading graph (section 12) */
+  .dag { position: relative; display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px;
+    row-gap: 44px; margin: 20px 0 8px; padding-right: 34px; }
+  .dag > svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .dag > svg path { fill: none; stroke: var(--fg); stroke-width: 1.3; }
+  .dag > svg marker path { fill: var(--fg); stroke: none; }
+  .node { position: relative; display: block; text-decoration: none; color: var(--fg);
+    border: 1px solid var(--fg); padding: 14px 16px; background: var(--bg); }
+  .node:hover, .node:focus { outline: 2px solid var(--fg); outline-offset: -1px; }
+  .node h3 { font-size: 1.05rem; margin: 0 0 6px; }
+  .node h3 .num { font-weight: 700; margin-right: 6px; }
+  .node p { margin: 6px 0 0; font-size: 0.93rem; }
+  .node p.why { color: var(--muted); font-size: 0.86rem; }
+  .node .after { display: none; }
+  #n-phil { justify-self: center; width: calc(50% - 20px); }
+  .ntags { margin: 0 0 4px; }
+  .ntag { display: inline-block; font-size: 0.75rem; padding: 0 8px; margin: 0 4px 4px 0;
+    border: 1px solid var(--fg); border-radius: 10px; cursor: help; }
+  @media (max-width: 680px) {
+    .dag { grid-template-columns: 1fr; row-gap: 14px; padding-right: 0; }
+    .dag > .node { grid-row: auto !important; grid-column: auto !important; }
+    #n-phil { width: auto; justify-self: stretch; }
+    .dag > svg { display: none; }
+    .node .after { display: inline; }
+  }
+    .more { font-size: 0.9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>horizon</h1>
+<p class="lede">An overview of what each part does and how the parts fit together.</p>
+<p class="stamp">Written 2026-10-24, updated 2026-11-02 against <code>main</code> at <code>4421b2d8</code>, revised again 2026-11-02 against <code>main</code> at <code>b1898229</code>, when !238 began serving <code>budget_compute</code>. Where this page and
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/AGENTS.md">AGENTS.md</a> disagree, AGENTS.md wins. <a href="#next">Read next</a> lists the other pages in this folder and which to read before which.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#what">1. What horizon is</a>
+  <a href="#picture">2. The picture</a>
+  <a href="#repo">3. The repository</a>
+  <a href="#pipeline">4. The pipeline</a>
+  <a href="#tiers">5. Data and its tiers</a>
+  <a href="#tools">6. The tools</a>
+  <a href="#skills">7. The skills</a>
+  <a href="#products">8. The products</a>
+  <a href="#models">9. Where models run</a>
+  <a href="#evals">10. Measuring: evals and MLflow</a>
+  <a href="#runs">11. Where it runs</a>
+  <a href="#work">12. How work gets done</a>
+  <a href="#glossary">13. Words you will meet</a>
+  <a href="#next">14. Read next</a>
+</nav>
+
+<h2 id="what">1. What horizon is</h2>
+<p>The University of Vermont keeps the data about research funding in separate places: funding
+opportunities, researchers, proposals, awards and inventions. horizon joins them, so that finding
+funding, preparing a proposal (pre-award), managing an award (post-award), commercialization and
+analytics all work from the same record.</p>
+<div class="cards">
+  <div class="card"><h3>A warehouse</h3><p>A PostgreSQL database that a pipeline fills. The database is organised by domain and by UVM's
+    data classification, and the pipeline keeps every version it fetched.</p></div>
+  <div class="card"><h3>Tools over it</h3><p>The app serves one MCP endpoint, <code>/mcp</code>, in its
+    own process, so people and their AI assistants can query the warehouse. It has 15 tools in five
+    families: UVM's rules, funding opportunities, a call's documents and funder guides, budgets, and a person's
+    proposals and drafts.</p></div>
+  <div class="card"><h3>Skills with them</h3><p>An assistant loads these written instructions to use the
+    tools. People get them in the Claude Code plugin, and developers get them in <code>.agents/skills/</code>.</p></div>
+  <div class="card"><h3>Products on top</h3><p>The pre-award app comes first. In it, a person discovers funding, builds a
+    proposal with its checklist and routes it to the people who help.</p></div>
+</div>
+<p>horizon was rebuilt from an earlier app, svelte-CODEC, which is now a read-only archive. The
+owner declared parity on 2026-10-17, and production moved to horizon on 2026-10-19.</p>
+
+<h3 id="first">Tools, skills and evals first</h3>
+<p>horizon is built in an order: the data, then tools over it, then the method for using them,
+then measurement, and the product last. <a href="philosophy.html">Its own page</a> explains why, and how that differs from the Codec prototype's
+feature-first build.</p>
+
+<p class="more">More: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/AGENTS.md">AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/README.md">README</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/docs/decisions/">the decisions</a>, <a href="evaluation.html">Evaluation</a>, <a href="problems-and-tools.html">Problems first, then tools</a>.</p>
+
+<h2 id="picture">2. The picture</h2>
+<figure>
+<svg viewBox="0 0 1060 530" role="img" aria-labelledby="diag-title diag-desc">
+  <title id="diag-title">horizon's architecture</title>
+  <desc id="diag-desc">Outside systems feed the pipeline, which writes PostgreSQL. The tools and the
+    app read PostgreSQL and serve people and their AI assistants. The app serves the tools in its own
+    process. Model lanes run on UVM's GPU cluster. Benchmarks measure the tools over HTTP and record
+    results in MLflow.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+
+  <!-- group labels -->
+  <text x="20" y="30" class="d-group">OUTSIDE SYSTEMS</text>
+  <text x="270" y="30" class="d-group">PIPELINE</text>
+  <text x="575" y="30" class="d-group">WAREHOUSE</text>
+  <text x="815" y="30" class="d-group">PRODUCTS</text>
+
+  <!-- outside systems -->
+  <rect x="20" y="45" width="215" height="105" rx="8" class="d-ext"/>
+  <text x="32" y="68" class="d-title">Funders</text>
+  <text x="32" y="88" class="d-text">Grants.gov · Simpler.Grants.gov</text>
+  <text x="32" y="105" class="d-text">NIH Guide · NSF solicitations</text>
+  <text x="32" y="122" class="d-text">foundation websites</text>
+  <text x="32" y="139" class="d-text">funder application guides</text>
+
+  <rect x="20" y="162" width="215" height="88" rx="8" class="d-ext"/>
+  <text x="32" y="185" class="d-title">Research records</text>
+  <text x="32" y="205" class="d-text">OpenAlex · ORCID · ROR</text>
+  <text x="32" y="222" class="d-text">ClinicalTrials.gov</text>
+  <text x="32" y="239" class="d-text">NIH / NSF award totals</text>
+
+  <rect x="20" y="262" width="215" height="105" rx="8" class="d-ext"/>
+  <text x="32" y="285" class="d-title">UVM</text>
+  <text x="32" y="305" class="d-text">units' web pages: the rules</text>
+  <text x="32" y="322" class="d-text">SPA reports and assignments</text>
+  <text x="32" y="339" class="d-text">directory · faculty catalogue</text>
+  <text x="32" y="356" class="d-text">SharePoint (Microsoft Graph)</text>
+
+  <!-- pipeline -->
+  <rect x="270" y="45" width="270" height="339" rx="10" class="d-box"/>
+  <text x="284" y="70" class="d-title">backend/</text>
+  <text x="284" y="88" class="d-sub">Python · Dagster · dbt</text>
+  <rect x="284" y="102" width="242" height="34" rx="6" class="d-chip"/>
+  <text x="296" y="124" class="d-text"><tspan font-weight="600">fetch</tspan>  Sources: outside systems</text>
+  <rect x="284" y="142" width="242" height="34" rx="6" class="d-chip"/>
+  <text x="296" y="164" class="d-text"><tspan font-weight="600">read</tspan>  Readers: text and sections</text>
+  <rect x="284" y="182" width="242" height="34" rx="6" class="d-chip"/>
+  <text x="296" y="204" class="d-text"><tspan font-weight="600">enrich</tspan>  models over our data</text>
+  <rect x="284" y="222" width="242" height="34" rx="6" class="d-chip"/>
+  <text x="296" y="244" class="d-text"><tspan font-weight="600">load</tspan>  results written back</text>
+  <rect x="284" y="270" width="242" height="50" rx="6" class="d-chip"/>
+  <text x="296" y="291" class="d-text"><tspan font-weight="600">dbt</tspan>  staging, intermediate, marts</text>
+  <text x="296" y="309" class="d-sub">the joined, contracted tables</text>
+  <text x="284" y="346" class="d-sub">defs/: Dagster assets, checks, schedules</text>
+  <text x="284" y="364" class="d-sub">one asset is one persisted object</text>
+
+  <!-- VACC -->
+  <rect x="270" y="420" width="270" height="88" rx="8" class="d-ext"/>
+  <text x="284" y="443" class="d-title">VACC GPUs</text>
+  <text x="284" y="463" class="d-text">UVM's cluster, vLLM: batch model</text>
+  <text x="284" y="480" class="d-text">lanes, plus the live embed and</text>
+  <text x="284" y="497" class="d-text">rerank servers (tunnelled)</text>
+
+  <!-- warehouse -->
+  <rect x="575" y="45" width="205" height="339" rx="10" class="d-box"/>
+  <text x="589" y="70" class="d-title">PostgreSQL 18</text>
+  <text x="589" y="88" class="d-sub">the tier is the schema</text>
+  <rect x="589" y="100" width="177" height="132" rx="6" class="d-low"/>
+  <text x="601" y="120" class="d-low-t">LOW</text>
+  <text x="601" y="140" class="d-text">raw · staging · enrich</text>
+  <text x="601" y="158" class="d-text">funding · people</text>
+  <text x="601" y="176" class="d-text">requirements</text>
+  <text x="601" y="194" class="d-text">curation · evals · mcp</text>
+  <text x="601" y="216" class="d-sub">public sources, derived data</text>
+  <rect x="589" y="244" width="177" height="112" rx="6" class="d-mod"/>
+  <text x="601" y="264" class="d-mod-t">MODERATE</text>
+  <text x="601" y="284" class="d-text">app · governance</text>
+  <text x="601" y="302" class="d-text">institutional · matching</text>
+  <text x="601" y="324" class="d-sub">people and proposals;</text>
+  <text x="601" y="340" class="d-sub">real only in production</text>
+  <text x="589" y="374" class="d-sub">production: codecdb.uvm.edu</text>
+
+  <!-- evals -->
+  <rect x="575" y="420" width="205" height="88" rx="8" class="d-box"/>
+  <text x="589" y="443" class="d-title">evals/ + MLflow</text>
+  <text x="589" y="463" class="d-text">benchmarks of the tools and</text>
+  <text x="589" y="480" class="d-text">the model lanes; MLflow</text>
+  <text x="589" y="497" class="d-text">keeps every recorded run</text>
+
+  <!-- products -->
+  <rect x="815" y="45" width="225" height="132" rx="10" class="d-box"/>
+  <text x="829" y="70" class="d-title">tools/</text>
+  <text x="829" y="88" class="d-sub">TypeScript · in the app's process</text>
+  <text x="829" y="110" class="d-text">published/: rules, calls,</text>
+  <text x="829" y="127" class="d-text">documents (Low)</text>
+  <text x="829" y="144" class="d-text">account/: proposals, drafts</text>
+  <text x="829" y="164" class="d-sub">15 tools at /mcp</text>
+
+  <rect x="815" y="192" width="225" height="192" rx="10" class="d-box"/>
+  <text x="829" y="217" class="d-title">frontend/</text>
+  <text x="829" y="235" class="d-sub">SvelteKit · the pre-award app</text>
+  <text x="829" y="258" class="d-text">Discover · Proposals</text>
+  <text x="829" y="275" class="d-text">Queue · Inbox · Insights</text>
+  <text x="829" y="292" class="d-text">Researchers · Requirements</text>
+  <text x="829" y="314" class="d-text">/mcp: the tools for a</text>
+  <text x="829" y="331" class="d-text">person's own assistant</text>
+  <text x="829" y="354" class="d-sub">Claude model calls, each one</text>
+  <text x="829" y="370" class="d-sub">in a ledger under a daily cap</text>
+
+  <rect x="815" y="420" width="225" height="88" rx="8" class="d-ext"/>
+  <text x="829" y="443" class="d-title">People</text>
+  <text x="829" y="463" class="d-text">in the browser, and their</text>
+  <text x="829" y="480" class="d-text">AI assistants (MCP clients):</text>
+  <text x="829" y="497" class="d-text">PIs, SPA, RD, leadership</text>
+
+  <!-- arrows: sources -> pipeline -->
+  <path d="M235 97 L268 115" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M235 206 L268 160" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M235 315 L268 200" class="d-arrow" marker-end="url(#ah)"/>
+  <!-- pipeline <-> VACC -->
+  <path d="M405 386 L405 418" class="d-arrow" marker-end="url(#ah)" marker-start="url(#ah)"/>
+  <!-- pipeline -> postgres -->
+  <path d="M540 214 L573 214" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="541" y="206" class="d-label">writes</text>
+  <!-- postgres -> mcp, app -->
+  <path d="M780 140 L813 120" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M780 300 L813 300" class="d-arrow" marker-end="url(#ah)" marker-start="url(#ah)"/>
+  <!-- app -> tools (in process) -->
+  <path d="M930 192 L930 179" class="d-arrow" marker-end="url(#ah)"/>
+  <text x="936" y="189" class="d-label">in process</text>
+  <!-- products -> people -->
+  <path d="M925 386 L925 418" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M1030 177 C 1056 260, 1056 380, 1030 418" class="d-arrow" marker-end="url(#ah)"/>
+  <!-- evals -> mcp (HTTP), evals <-> its keys and scores -->
+  <path d="M780 445 C 797 420, 797 200, 813 160" class="d-arrow-dash" marker-end="url(#ah)"/>
+  <text x="786" y="412" class="d-label">HTTP</text>
+  <path d="M677 418 L677 386" class="d-arrow-dash" marker-end="url(#ah)" marker-start="url(#ah)"/>
+</svg>
+<figcaption>Data flows left to right. The pipeline fetches from systems horizon does not run, turns
+what it fetched into text and structured facts, and writes the warehouse. The published tools read
+Low data through the database role <code>mcp</code>. The account tools run in the app and read
+Moderate rows under the app's access rules. The app serves both at <code>/mcp</code>, in one
+process, with no socket between the pages and the tools. Dashed lines show the benchmarks, which call the
+tools over HTTP like any client and keep their keys and scores in the <code>evals</code> schema.</figcaption>
+</figure>
+
+<p class="more">More: <a href="data-sources.html">Data sources</a>, <a href="account-question-flow.html">One request through the parts</a>.</p>
+
+<h2 id="repo">3. The repository</h2>
+<p>The repository has a few top-level folders. <code>backend/</code>,
+<code>frontend/</code> and <code>evals/</code> each carry their own <code>AGENTS.md</code>. The tool layer in <code>frontend/src/lib/server/tools/</code> has one too. Read
+the file before you change anything in its folder.</p>
+<table>
+  <thead><tr><th>Folder</th><th>What it is</th><th>Built with</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/backend/AGENTS.md"><code>backend/</code></a></td><td>The pipeline: the Python package <code>pipeline</code> (Sources, Readers, model lanes, Dagster definitions), the dbt project in <code>backend/dbt</code>, and the alembic migrations for the pipeline's schemas.</td><td>Python, uv, Dagster, dbt</td></tr>
+        <tr><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/AGENTS.md"><code>frontend/</code></a></td><td>The pre-award app, with the Drizzle migrations for the app's own schemas (<code>app</code>, <code>governance</code>, <code>evals</code>, and others). It also holds the tool layer (<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/AGENTS.md"><code>src/lib/server/tools/</code></a>, decision 0023): <code>published/</code> (the Low tools, which import nothing from the app), <code>account/</code> (the tools that need an account), and <code>app/</code> (the one list of tools, <code>APP_TOOLS</code>, the <code>callTool</code> function and the <code>/mcp</code> connector). The headless host <code>host.ts</code> (<code>make tools-dev</code>) is for development and the benchmark gate only.</td><td>SvelteKit 3, Drizzle; TypeScript, Node</td></tr>
+    <tr><td><a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/evals/AGENTS.md"><code>evals/</code></a></td><td>The benchmarks, one folder per tool or model lane they judge, and the shared helpers (the one MLflow helper is <code>evals/record.py</code>). It is its own uv project and cannot import the pipeline.</td><td>Python, MLflow</td></tr>
+    <tr><td><code>db/</code></td><td><code>cluster.sql</code> holds the roles, applied once per cluster, and <code>roles.sql</code> holds the schemas and grants for each database.</td><td>SQL</td></tr>
+    <tr><td><code>scripts/</code></td><td>Box operations, such as deploys, the verify scope and database helpers.</td><td>shell, Python</td></tr>
+    <tr><td><code>deploy/</code></td><td>Example env files and the production database bootstrap.</td><td></td></tr>
+    <tr><td><code>docs/</code></td><td>Design and decisions. <code>docs/decisions/</code> is the dated record of every ruling.</td><td>Markdown</td></tr>
+    <tr><td><code>findings/</code></td><td>Measurements made once, each in <code>findings/&lt;date&gt;-&lt;name&gt;/</code> with a README. Nothing imports it.</td><td></td></tr>
+  </tbody>
+</table>
+
+<p class="more">More: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/backend/AGENTS.md">backend AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/AGENTS.md">frontend AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/src/lib/server/tools/AGENTS.md">the tool layer's AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/evals/AGENTS.md">evals AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/README.md">the plugin README</a>.</p>
+
+<h2 id="pipeline">4. The pipeline</h2>
+<p>The pipeline is one Python package with <strong>stages</strong>, lowest first. A stage may
+import only the stages below it, and <code>make verify</code> checks that.</p>
+<ol class="flow">
+  <li><strong>store</strong>: the database access every stage shares.</li>
+  <li><strong>fetch</strong>: <em>Sources</em>, the code that talks to a system we do not run. Every
+    fetch lands in <code>raw</code> and is kept. History is never pruned (decision 0002).</li>
+  <li><strong>read</strong>: <em>Readers</em>, which turn a fetched page or record into text,
+    blocks or sections. Readers convert documents with docling.</li>
+  <li><strong>enrich</strong>: models over our data, such as eligibility answers, a document's
+    use cases, search vectors and grant-matching suggestions.</li>
+  <li><strong>load</strong>: writes the results back.</li>
+  <li><strong>defs</strong>: the Dagster assets, checks and schedules, one file per domain.</li>
+</ol>
+<p>Each stage has the same <strong>domains</strong>: <code>opportunities</code>,
+<code>researchers</code>, <code>match</code>, <code>requirements</code>, <code>proposals</code>,
+<code>awards</code>, <code>peers</code>, <code>reference</code>, plus <code>institutional</code> for
+SharePoint. Domains never import each other. A <strong>dbt mart</strong> answers a question that
+crosses domains by joining through the reference tables (people, units, sponsors).</p>
+<p><strong>dbt</strong> turns the raw rows into the tables the products read:
+<code>staging</code> (one clean view per source), then <code>intermediate</code>, then
+<code>marts</code> in the schemas <code>funding</code>, <code>people</code> and
+<code>requirements</code>. The marts the tools and the app read carry dbt contracts, so a change to
+their shape fails the build.</p>
+<p>At <code>98b7a9b6</code> (2026-11-02) the pipeline has 207 Dagster assets with 645 checks, and
+dbt builds 110 models, 71 of them marts (<a href="data-sources.html">Data sources</a> has the counts).</p>
+<p><strong>Dagster</strong> runs it all. A raw source is one asset with its checks (fresh, schema
+drift, duplicates). A model lane has one shape: <code>&lt;domain&gt;_jobs_pending →
+&lt;domain&gt;_&lt;lane&gt;_run → &lt;domain&gt;_&lt;lane&gt;_loaded</code>. Schedules are
+allow-lists in <code>defs/schedules.py</code>: a daily ingest, dbt at 07:00, the checks two
+hours after the ingest, and weekly, monthly or quarterly runs for the slow sources.</p>
+
+<p class="more">More: <a href="data-sources.html">Data sources</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/backend/src/pipeline/">the pipeline package</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/backend/src/pipeline/defs/schedules.py">schedules.py</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/backend/dbt/models/marts/">the dbt marts</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0002-history-is-a-product-requirement.md">decision 0002 on keeping history</a>.</p>
+
+<h2 id="tiers">5. Data and its tiers</h2>
+<p>horizon uses UVM's data risk classification: Low, Moderate, High, Restricted. It holds
+<strong>nothing above Moderate</strong> (decision 0003). One rule shapes the whole database.
+<strong>The tier is the schema</strong>. A table's tier is the schema it lives in, and a person
+or a process that may not see a tier holds no access to its schemas at all.</p>
+<table>
+  <thead><tr><th>Tier</th><th>Schemas</th><th>What is in them</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag low">Low</span></td><td><code>raw</code>, <code>staging</code>, <code>enrich</code>, <code>funding</code>, <code>people</code>, <code>requirements</code>, <code>curation</code>, <code>evals</code>, <code>mcp</code></td><td>Public sources and what models derive from them: opportunities, UVM's published rules, public research records, benchmark keys, the service tokens and the tools' spend.</td></tr>
+    <tr><td><span class="tag mod">Moderate</span></td><td><code>app</code>, <code>governance</code>, <code>institutional</code>, <code>matching</code></td><td>The product's records: accounts, proposals and their documents, sessions, model-call ledgers, SharePoint content, per-person matching.</td></tr>
+  </tbody>
+</table>
+<p>Each process has its own database role: <code>pipeline</code> (one daemon, every tier),
+<code>mcp</code> (Low only, used by the published tools), <code>web_app</code> (the app, which applies its own access rules to
+Moderate rows). Outside production, Moderate data is <strong>synthetic</strong>: seed personas,
+never real people (decision 0006). <code>make tiers-check</code> enforces the grants.</p>
+
+<figure>
+<svg viewBox="0 0 1060 420" role="img" aria-labelledby="dbs-title dbs-desc">
+  <title id="dbs-title">Where the databases live</title>
+  <desc id="dbs-desc">Two virtual machines. On codecdb.uvm.edu, its own VM, the production database
+    horizon holds Low and Moderate data about real accounts and proposals, beside horizon_dagster,
+    the pipeline's own state. On codec-dev, the production app and the production pipeline connect
+    to that database. codec-dev's own PostgreSQL 18 cluster holds the golden copy, horizon_dev, with
+    Low data only. Three kinds of database are made from it: a developer's own, horizon_staging, and
+    a worktree's throwaway. Nothing is copied from production to codec-dev.</desc>
+  <defs>
+    <marker id="ah-db" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="24" class="d-group">CODECDB.UVM.EDU, ITS OWN VM</text>
+  <text x="360" y="24" class="d-group">CODEC-DEV, THIS VM</text>
+
+  <!-- production VM -->
+  <rect x="20" y="36" width="300" height="300" rx="10" class="d-ext"/>
+  <text x="36" y="62" class="d-sub">PostgreSQL, production only</text>
+  <rect x="36" y="76" width="268" height="122" rx="8" class="d-mod"/>
+  <text x="50" y="100" class="d-title">horizon</text>
+  <text x="50" y="120" class="d-mod-t">LOW AND MODERATE</text>
+  <text x="50" y="140" class="d-text">real accounts and proposals</text>
+  <text x="50" y="164" class="d-sub">migrated only by the deploy</text>
+  <text x="50" y="181" class="d-sub">from main</text>
+  <rect x="36" y="214" width="268" height="56" rx="6" class="d-chip"/>
+  <text x="50" y="237" class="d-text"><tspan font-weight="600">horizon_dagster</tspan></text>
+  <text x="50" y="256" class="d-sub">the production pipeline's state</text>
+  <text x="36" y="300" class="d-sub">reached only with the operator's</text>
+  <text x="36" y="317" class="d-sub">password (scripts/prod_env.sh)</text>
+
+  <!-- dev VM -->
+  <rect x="360" y="36" width="680" height="370" rx="10" class="d-box"/>
+  <rect x="380" y="50" width="280" height="30" rx="6" class="d-chip"/>
+  <text x="392" y="70" class="d-text"><tspan font-weight="600">horizon-web</tspan>  the production app</text>
+  <rect x="380" y="88" width="280" height="30" rx="6" class="d-chip"/>
+  <text x="392" y="108" class="d-text"><tspan font-weight="600">horizon-dagster</tspan>  the pipeline</text>
+  <path d="M380 65 C 350 65, 340 110, 306 118" class="d-arrow" marker-end="url(#ah-db)"/>
+  <path d="M380 103 C 352 103, 344 150, 306 150" class="d-arrow" marker-end="url(#ah-db)"/>
+
+  <text x="380" y="146" class="d-sub">PostgreSQL 18 on :5433</text>
+  <rect x="380" y="156" width="230" height="120" rx="8" class="d-low"/>
+  <text x="394" y="180" class="d-title">horizon_dev</text>
+  <text x="394" y="200" class="d-low-t">THE GOLDEN COPY · LOW ONLY</text>
+  <text x="394" y="222" class="d-sub">the operator writes it;</text>
+  <text x="394" y="239" class="d-sub">nobody works in it</text>
+  <text x="394" y="262" class="d-sub">nothing comes from production</text>
+
+  <rect x="690" y="156" width="330" height="64" rx="6" class="d-chip"/>
+  <text x="704" y="178" class="d-text"><tspan font-weight="600">horizon_dev_&lt;person&gt;</tspan>  yours</text>
+  <text x="704" y="198" class="d-sub">the golden copy's raw rows, then</text>
+  <text x="704" y="213" class="d-sub">dbt builds the marts (make db-copy-raw)</text>
+
+  <rect x="690" y="232" width="330" height="64" rx="6" class="d-chip"/>
+  <text x="704" y="254" class="d-text"><tspan font-weight="600">horizon_staging</tspan>  the box's copy</text>
+  <text x="704" y="274" class="d-sub">the golden copy's Low data, plus</text>
+  <text x="704" y="289" class="d-sub">synthetic people (make db-copy-staging)</text>
+
+  <rect x="690" y="308" width="330" height="64" rx="6" class="d-chip"/>
+  <text x="704" y="330" class="d-text"><tspan font-weight="600">horizon_wt_&lt;name&gt;</tspan>  a worktree's</text>
+  <text x="704" y="350" class="d-sub">migrated and empty (make wt-db), or a</text>
+  <text x="704" y="365" class="d-sub">copy of staging (make db-copy-wt)</text>
+
+  <path d="M610 188 L686 188" class="d-arrow" marker-end="url(#ah-db)"/>
+  <path d="M610 230 C 650 230, 650 264, 686 264" class="d-arrow" marker-end="url(#ah-db)"/>
+  <path d="M1020 270 C 1048 290, 1048 320, 1023 336" class="d-arrow-dash" marker-end="url(#ah-db)"/>
+
+  <text x="380" y="300" class="d-sub">Moderate data on this VM is</text>
+  <text x="380" y="317" class="d-sub">synthetic: seed personas, never</text>
+  <text x="380" y="334" class="d-sub">real people (decision 0006)</text>
+</svg>
+<figcaption>Production's database is the only one that holds real people, and it lives on its own
+VM. Everything on codec-dev descends from the golden copy, which holds Low data only, and nothing
+is copied down from production (decision 0005). You work in your own database or a worktree's
+throwaway; the operator alone writes the golden copy and <code>horizon_staging</code>.</figcaption>
+</figure>
+
+<p class="more">More: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/data-governance.md">data governance</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0003-data-tiers.md">decision 0003 on data tiers</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0006-the-app-schemas-and-moderate-data-in-development.md">decision 0006 on Moderate data in development</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/db/roles.sql">db/roles.sql</a>.</p>
+
+<h2 id="tools">6. The tools</h2>
+<p>The tools live in <code>frontend/src/lib/server/tools/</code>.</p>
+<p>An MCP endpoint lets an AI assistant call tools. horizon has one, <code>/mcp</code>, which the app
+serves in its own process. It has 15 tools in five families:</p>
+<ul>
+  <li>UVM's rules: <code>uvm_requirements_search</code>, <code>uvm_requirements_read</code>,
+    <code>uvm_requirements_outline</code> and <code>uvm_requirements_units</code>.</li>
+  <li>Funding opportunities: <code>opportunities_match</code> to find the calls that fit some work, and
+    <code>opportunities_eligibility</code> and
+    <code>checklist_read</code> to judge one call.</li>
+  <li>A call's documents and funder guides: <code>documents_list</code>,
+    <code>documents_search</code> and <code>documents_read</code>.</li>
+  <li>Budgets: <code>budget_compute</code>.</li>
+  <li>A proposal and its drafts: <code>proposals_list</code>, <code>draft_read</code>,
+    <code>draft_edit</code> and <code>critiques_list</code>.</li>
+</ul>
+<p>Published tools read Low data only. Account tools need a signed-in person and read that person's
+own Moderate rows. Search combines keyword search, vectors and a reranker. Every reply is the
+envelope <code>{status, message, ...}</code>, and every search reports which <em>lanes</em> ran and
+which fell back, so a degraded answer always says it is degraded.</p>
+<p>A person mints an <code>hzp_</code> token in the app's Settings while signed in with their
+NetID, then adds the connector to their client (decision 0012). Services get operator-minted tokens (prefix <code>hzn_</code>,
+NetIDs <code>svc_*</code>) that reach only the published tools. There is no anonymous access from
+outside the box. The headless host on loopback takes anonymous callers in development only. The
+app's hostname is reachable on the UVM network or the VPN.
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/mcp-connect.md">docs/mcp-connect.md</a> explains how to connect. <a href="tools-skills-mcp.html">Tools, skills and MCP</a> lists every tool and says what each one is
+for.</p>
+<p>Two decisions, both accepted, add budgets. Decision 0024 makes a fact a reviewed value that
+keeps the sentence it rests on. Decision 0025 puts one budget calculator in front of SPA's entry of
+the budget in UVMClick, which stays the record. Merge request !237 built and tested the calculator, the budget engine, in
+<code>frontend/src/lib/tools/budget/</code>, and <code>budget_compute</code> serves it (merge request !238).</p>
+
+<p class="more">More: <a href="tools-skills-mcp.html">the tool inventory</a>, <a href="tools-skills-mcp.html#m-code">where it lives in the code</a>, <a href="budgets.html">Budgets</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/mcp-connect.md">connecting to the MCP</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0023-one-tool-layer.md">decision 0023 on one tool layer</a>.</p>
+
+<h2 id="skills">7. The skills</h2>
+<p>A tool says what it does. A skill is a set of written instructions an assistant loads to reach a
+person's goal with several tools, and to judge how far to trust their answers. horizon
+ships skills to people who use the tools, and keeps its own for the developers who build them.</p>
+<table>
+  <thead><tr><th>Where</th><th>Who it is for</th><th>What is there</th></tr></thead>
+  <tbody>
+    <tr><td><a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/plugin/skills/"><code>plugin/skills/</code></a></td><td>People using the tools from Claude Code</td><td><code>uvm-requirements</code>: how to read UVM's rules without overstating them (quote the revision date, keep UVM's half apart from the funder's, and treat a scan that cannot be read as held, not missing). <code>budget-build</code>: how to build and check a proposal budget with <code>budget_compute</code>, shipped with it in !238.</td></tr>
+    <tr><td><a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/.agents/skills/"><code>.agents/skills/</code></a></td><td>Developers and their agents working on horizon</td><td><code>experiment-ledger</code> and <code>experiment-report</code> (how to record and show a benchmark run), <code>unslop</code> (the writing rules), and the third-party <code>shadcn-svelte</code>, pinned in <code>skills-lock.json</code>.</td></tr>
+  </tbody>
+</table>
+<p>A person gets the user skills by installing the Claude Code plugin in <code>plugin/</code>, which also
+holds the <code>/mcp</code> address and asks for the token. Claude Desktop takes no plugin, so its users
+add the skill by hand (decision 0023, item 12). The MCP specification now lets a server serve skills
+itself, but the Claude clients do not load them that way yet, so the plugin remains how skills
+reach people (owner, 2026-11-02).</p>
+<p>The app uses the same text. The app builds the requirements chat's system prompt from
+<code>uvm-requirements</code>'s <code>SKILL.md</code>, minus the sections about calling tools
+(<code>frontend/src/lib/server/answer/prompt.ts</code>), so the chat and an outside assistant follow
+one set of rules. A test fails when a skill names a tool or a field the server does not serve, or
+when a served tool appears in no skill (<code>frontend/tests/tools/skill.test.ts</code>).</p>
+<p>A workflow a person starts, such as reviewing a draft against the call, may move from a skill to an
+MCP prompt the server serves itself. Claude Code lists a server's prompts as commands, so the workflow would
+reach people without the plugin. That is proposed, not ruled
+(<a href="tools-skills-mcp.html#s-boundary">where a tool stops and a skill begins</a>).</p>
+
+<p class="more">More: <a href="tools-skills-mcp.html#skills">the skills in the tool inventory</a>, <a href="problems-and-tools.html#skills">two kinds of skill</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/skills/uvm-requirements/SKILL.md">uvm-requirements' SKILL.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/plugin/README.md">the plugin README</a>.</p>
+
+<h2 id="products">8. The products</h2>
+<h3>The pre-award app (<code>frontend/</code>)</h3>
+<table>
+  <thead><tr><th>Area</th><th>What a person does there</th></tr></thead>
+  <tbody>
+    <tr><td>Discover</td><td>Find funding opportunities, see whether UVM is eligible, read the call's facts and deadlines, and get matching suggestions.</td></tr>
+    <tr><td>Proposals</td><td>Work on one proposal through its checklist (drafted from the call, then edited), the conversation with SPA and RD, earlier reviews, a draft check and a mock review panel.</td></tr>
+    <tr><td>Queue, Inbox</td><td>SPA and research development staff pick up and route the proposals they support.</td></tr>
+    <tr><td>Insights, Academic analytics</td><td>Compare UVM with its peers on federal funding, funders and topics.</td></tr>
+    <tr><td>Researchers</td><td>Browse a directory of UVM researchers. It is for staff and built from public research records.</td></tr>
+    <tr><td>Requirements</td><td>Search and chat over UVM's published rules. This is the public part of the app.</td></tr>
+    <tr><td>Admin, Settings</td><td>Manage accounts, roles and data-access grants, and a person's own tokens and connections.</td></tr>
+  </tbody>
+</table>
+<p>The app's model calls go to Claude. Each call is a row in <code>app.model_calls</code>, under one
+daily spending cap for the whole app.</p>
+
+<p class="more">More: <a href="drafts-in-teams.html">Drafts in Teams</a>, <a href="account-question-flow.html">one question, end to end</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/frontend/AGENTS.md">frontend AGENTS.md</a>.</p>
+
+<h2 id="models">9. Where models run</h2>
+<table>
+  <thead><tr><th>Where</th><th>What runs</th><th>For</th></tr></thead>
+  <tbody>
+    <tr><td>VACC GPUs, batch</td><td>Open-weight models served with vLLM, as jobs the pipeline submits; results come back as files</td><td>Opportunity facts and eligibility answers, a requirement document's use cases, foundation readings, facts from CVs, grant-matching reranking.</td></tr>
+    <tr><td>VACC GPUs, live</td><td>vLLM servers held on a GPU node and tunnelled to the box: the embedding model <code>google/embeddinggemma-300m</code> and the reranker</td><td>The vectors search uses (the pipeline embeds documents, the tools embed questions) and the tools' reranking. When a lane is down, the tools say so in their <em>lanes</em>.</td></tr>
+    <tr><td>The box (CPU)</td><td>docling</td><td>Turning PDFs and Word files into structured text.</td></tr>
+    <tr><td>The app</td><td>Claude (Anthropic API)</td><td>Requirements chat answers, checklist drafting, draft check, mock review panel, comparing a draft with earlier reviews.</td></tr>
+    <tr><td>The tools and the app</td><td>Jev (TypeSafe)</td><td>A stand-in when the reranking lane is down, and placing a reviewer's point in a submitted document.</td></tr>
+  </tbody>
+</table>
+<p>A pipeline lane records the model and the version of its prompt with every result, so you can
+always trace a number to what produced it.</p>
+
+<p class="more">More: <a href="evaluation.html">Evaluation</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/backend/src/pipeline/enrich/">the enrich folder</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/tree/main/frontend/src/lib/server/tools/published/lanes/">the tool lanes</a>.</p>
+
+<h2 id="evals">10. Measuring: evals and MLflow</h2>
+<p>A benchmark judges a change to retrieval or to a model lane, not a person's eye. Each benchmark is
+a folder in <code>evals/</code>: the requirements gate (does search find the right passage?),
+awards matching, eligibility, and the proposal checklist. A benchmark runs against a frozen
+dataset and logs a <strong>run</strong> to <strong>MLflow</strong>, the experiment tracker
+(<code>horizon-mlflow</code> on the box).</p>
+<ul>
+  <li><strong>Cite a number with an MLflow run id</strong> or a committed <code>findings/</code>
+    output, or do not cite it.</li>
+  <li>A run is <code>recorded</code> (from a clean commit, citable) or <code>routine</code>
+    (your scratch).</li>
+  <li>MLflow holds the record: parameters, metrics, the dataset's sha256. The bytes (datasets and raw
+    outputs) live in the data root <code>$EVALS_DATA_DIR</code>, split by tier, never in git.</li>
+</ul>
+<p class="more">More: <a href="evaluation.html">Evaluation</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/evals/README.md">docs/evals/README.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/evals/AGENTS.md">evals/AGENTS.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/evals/design.md">docs/evals/design.md</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/decisions/0018-findings-not-lab.md">decision 0018 on where benchmark data lives</a>.</p>
+
+<h2 id="runs">11. Where it runs</h2>
+<p>Everything runs on one UVM virtual machine, <code>codec-dev</code>, under pm2, except
+production's database, which is on <code>codecdb.uvm.edu</code>.
+<a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/release.md">docs/release.md</a> has the details.</p>
+<table>
+  <thead><tr><th>Process</th><th>What it is</th><th>Database</th></tr></thead>
+  <tbody>
+    <tr><td><code>horizon-web</code></td><td>The production app, which serves the tools in process</td><td>production, on codecdb</td></tr>
+    <tr><td><code>horizon-web-staging</code></td><td>A box-local copy of the app over synthetic data, for pre-release checks and demos</td><td><code>horizon_staging</code></td></tr>
+    <tr><td><code>horizon-dagster</code>, <code>horizon-dagster-ui</code></td><td>The production pipeline and its UI (loopback only)</td><td>production, on codecdb</td></tr>
+    <tr><td><code>horizon-mlflow</code></td><td>The experiment record</td><td><code>horizon_mlflow</code></td></tr>
+  </tbody>
+</table>
+<p>Development databases live on a local PostgreSQL 18 cluster on port 5433: your own
+<code>horizon_dev_&lt;you&gt;</code>, a throwaway <code>horizon_wt_&lt;name&gt;</code> per worktree,
+and the shared ones (<code>horizon_dev</code>, <code>horizon_staging</code>) that only the operator
+writes.</p>
+<p>The word "staging" has two meanings, so check it. Production's public hostname is
+<code>staging.codec.uvm.edu</code>, so "staging" in a URL means production. The process
+<code>horizon-web-staging</code> and the database <code>horizon_staging</code> are the synthetic copy
+on the box, reached only through a tunnel.</p>
+
+<p class="more">More: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/release.md">release</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/deploy.md">deploy</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/codecdb.md">codecdb</a>.</p>
+
+<h2 id="work">12. How work gets done</h2>
+<ol class="flow">
+  <li>Work on a branch in your own git worktree, never in the main checkout.</li>
+  <li>Give the worktree its own database: <code>make wt-db NAME=&lt;name&gt;</code>, and export the
+    <code>DATABASE_URL</code> it prints.</li>
+  <li>Run <code>make verify</code>. It runs the checks for what your branch changed, and the
+    pre-push hook runs it again.</li>
+  <li>Push the branch and open a merge request. CI runs the same checks.</li>
+  <li>The owner merges and ships to production. Agents never start pm2, deploy, or touch
+    production.</li>
+</ol>
+<p>A schema change is a migration: alembic for the pipeline's schemas, Drizzle for the app's. Its
+merge message lists the operator steps that upgrade the shared databases.</p>
+
+<p class="more">More: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/AGENTS.md">AGENTS.md rules</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/onboarding.md">onboarding</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/docs/traps.md">traps</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/scripts/verify_scope.py">verify_scope.py</a>.</p>
+
+<h2 id="glossary">13. Words you will meet</h2>
+<dl class="glossary">
+  <dt>Source</dt><dd>Pipeline code that fetches from one outside system and lands it in <code>raw</code>.</dd>
+  <dt>Reader</dt><dd>Pipeline code that turns a fetched page or file into text, blocks or sections.</dd>
+  <dt>Lane</dt><dd>A model step in the pipeline (an enrich lane), or one stage of the tools' search (the rerank lane).</dd>
+  <dt>Mart</dt><dd>A finished dbt table the products read.</dd>
+  <dt>Tier</dt><dd>UVM's data classification (Low, Moderate); in horizon, the schema a table lives in.</dd>
+  <dt>Gate</dt><dd>The requirements benchmark a retrieval change must pass.</dd>
+  <dt>Arm</dt><dd>One configuration in a benchmark, compared with its parent.</dd>
+  <dt>MCP</dt><dd>Model Context Protocol, which an AI assistant uses to call a server's tools.</dd>
+  <dt>Published tool</dt><dd>A tool that reads Low data only and answers for anyone who may connect, such as <code>uvm_requirements_search</code>.</dd>
+  <dt>Account tool</dt><dd>A tool that answers for one signed-in person and reads their own Moderate rows, such as <code>proposals_list</code>. It refuses a call with no account.</dd>
+  <dt>Envelope</dt><dd>The shape of every tool reply: <code>{status, message, ...}</code>. <code>status</code> is <code>ok</code>, <code>not_found</code>, <code>refused</code> or <code>truncated</code>, and <code>message</code> is one sentence that gives the next step.</dd>
+  <dt>via</dt><dd>Where a call came from: <code>assistant</code> for a person's own assistant over <code>/mcp</code>, <code>platform</code> for the app's own pages calling the tools in process.</dd>
+  <dt>PI</dt><dd>Principal investigator, the researcher leading a proposal.</dd>
+  <dt>SPA</dt><dd>Sponsored Project Administration, UVM's office that submits proposals and manages awards.</dd>
+  <dt>RD</dt><dd>Research development: staff who help researchers find funding and shape proposals.</dd>
+  <dt>VACC</dt><dd>The Vermont Advanced Computing Center, UVM's cluster with the GPUs.</dd>
+  <dt>The archive</dt><dd>svelte-CODEC, the app horizon was rebuilt from. It is read-only.</dd>
+</dl>
+
+<p class="more">More: <a href="tools-skills-mcp.html">the tool inventory</a>, <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/evals/AGENTS.md">evals AGENTS.md for its domain words</a>.</p>
+
+<h2 id="next">14. Read next</h2>
+<p>These are the other pages in this folder. An arrow points from a page to one that builds on it. Any order
+that follows the arrows works, and the numbers are one such order. Start with Tools, skills and evals first, which gives the reasons behind the other pages. Hover a tag to see what it means.</p>
+<div class="dag">
+  <svg aria-hidden="true"><defs><marker id="dag-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g></svg>
+  <a class="node" id="n-phil" href="philosophy.html" style="grid-row: 1; grid-column: 1 / span 2">
+    <h3><span class="num">1</span> Tools, skills and evals first</h3>
+    <p class="ntags"><span class="ntag" title="Explains ideas, with horizon as the example.">conceptual</span></p>
+    <p>The page explains why horizon is built in the order data, tools, skills, evals, then product, and sets that beside the Codec prototype, which builds the same product feature first.</p>
+    <p class="why"><span class="after">Read after this page. </span>It gives the reasons behind every page that follows.</p>
+  </a>
+  <a class="node" id="n-data" href="data-sources.html" style="grid-row: 2; grid-column: 1">
+    <h3><span class="num">2</span> Data sources</h3>
+    <p class="ntags"><span class="ntag" title="Gathers facts from many files and decisions into one list to look things up in.">compilation</span> <span class="ntag" title="Describes the code as it is on main, with file paths.">codebase</span></p>
+    <p>The page covers every outside system horizon takes data from: funders, research records and UVM itself. It says what each gives and how it enters the warehouse.</p>
+    <p class="why"><span class="after">Read after 1. Tools, skills and evals first. </span>Where the warehouse gets its data.</p>
+  </a>
+  <a class="node" id="n-aqf" href="account-question-flow.html" style="grid-row: 2; grid-column: 2">
+    <h3><span class="num">3</span> One question, end to end</h3>
+    <p class="ntags"><span class="ntag" title="Explains ideas, with horizon as the example.">conceptual</span> <span class="ntag" title="Follows how something happens, step by step.">workflow</span></p>
+    <p>A person asks their own assistant about their proposal. The page follows that one request through the agent, the skill, the MCP server and the tools.</p>
+    <p class="why"><span class="after">Read after 1. Tools, skills and evals first. </span>It gives "tool", "skill" and "MCP" a concrete meaning.</p>
+  </a>
+  <a class="node" id="n-cap" href="proposed-capabilities.html" style="grid-row: 3; grid-column: 1">
+    <h3><span class="num">4</span> Proposed capabilities</h3>
+    <p class="ntags"><span class="ntag" title="Covers what is decided or proposed but not built yet.">roadmap</span> <span class="ntag" title="Describes the code as it is on main, with file paths.">codebase</span></p>
+    <p>The page covers the guarantees every tool and feature inherits: who is asking, what they may do, fair use and cost, answers you can trust, keeping the record.</p>
+    <p class="why"><span class="after">Read after 3. One question, end to end. </span>It makes the guarantees behind that one request general.</p>
+  </a>
+  <a class="node" id="n-tsm" href="tools-skills-mcp.html" style="grid-row: 3; grid-column: 2">
+    <h3><span class="num">5</span> Tools, skills, MCP</h3>
+    <p class="ntags"><span class="ntag" title="Gathers facts from many files and decisions into one list to look things up in.">compilation</span> <span class="ntag" title="Describes the code as it is on main, with file paths.">codebase</span> <span class="ntag" title="Follows how something happens, step by step.">workflow</span></p>
+    <p>The page lists every tool horizon serves, what it returns and who may call it. It also covers the skills we ship, which parts of the MCP specification we use, and where the tools live in the code.</p>
+    <p class="why"><span class="after">Read after 3. One question, end to end. </span>It is the full inventory behind the one request.</p>
+  </a>
+  <a class="node" id="n-prob" href="problems-and-tools.html" style="grid-row: 4; grid-column: 1">
+    <h3><span class="num">6</span> Problems first, then tools</h3>
+    <p class="ntags"><span class="ntag" title="Explains ideas, with horizon as the example.">conceptual</span></p>
+    <p>The page explains why the tools are shaped as they are, starting from the questions people bring at each stage, and which to build next.</p>
+    <p class="why"><span class="after">Read after 5. Tools, skills, MCP. </span>Once you know what exists, you can see why it is shaped that way.</p>
+  </a>
+  <a class="node" id="n-drafts" href="drafts-in-teams.html" style="grid-row: 4; grid-column: 2">
+    <h3><span class="num">7</span> Drafts in Teams</h3>
+    <p class="ntags"><span class="ntag" title="Covers one product feature in depth.">feature</span> <span class="ntag" title="Follows how something happens, step by step.">workflow</span></p>
+    <p>This page covers one feature in depth. It shows how a proposal's checklist becomes drafts in the team's folder, and how assistants read and write their sections.</p>
+    <p class="why"><span class="after">Read after 5. Tools, skills, MCP. </span>It shows two of those tools, draft_read and draft_edit, at work.</p>
+  </a>
+  <a class="node" id="n-budget" href="budgets.html" style="grid-row: 5; grid-column: 1">
+    <h3><span class="num">8</span> Budgets</h3>
+    <p class="ntags"><span class="ntag" title="Covers what is decided or proposed but not built yet.">roadmap</span> <span class="ntag" title="Covers one product feature in depth.">feature</span></p>
+    <p>The page covers the budget questions people ask, the budget as data, the arithmetic, the reference facts and the checks, behind decisions 0024 and 0025.</p>
+    <p class="why"><span class="after">Read after 6. Problems first, then tools. </span>It applies the method to the next area being built.</p>
+  </a>
+  <a class="node" id="n-eval" href="evaluation.html" style="grid-row: 5; grid-column: 2">
+    <h3><span class="num">9</span> Evaluation</h3>
+    <p class="ntags"><span class="ntag" title="Explains ideas, with horizon as the example.">conceptual</span> <span class="ntag" title="Follows how something happens, step by step.">workflow</span></p>
+    <p>The page covers how horizon measures its tools and models today, and the level it does not measure yet. That level is whether an assistant finishes a task.</p>
+    <p class="why"><span class="after">Read after 5. Tools, skills, MCP and 6. Problems first, then tools. </span>It shows how to judge that a tool, or a whole task, is done.</p>
+  </a>
+</div>
+<script>
+(() => {
+  const EDGES = [['phil','data'],['phil','aqf'],['aqf','cap'],['aqf','tsm'],['tsm','prob'],['tsm','drafts'],['prob','budget'],['tsm','eval',1],['prob','eval']];
+  const dag = document.querySelector('.dag');
+  const svg = dag.querySelector('svg');
+  const g = svg.querySelector('g');
+  function draw() {
+    if (getComputedStyle(svg).display === 'none') return;
+    const r = dag.getBoundingClientRect();
+    svg.setAttribute('viewBox', `0 0 ${r.width} ${r.height}`);
+    svg.setAttribute('width', r.width);
+    svg.setAttribute('height', r.height);
+    let out = '';
+    for (const [a, b, side] of EDGES) {
+      const A = document.getElementById('n-' + a).getBoundingClientRect();
+      const B = document.getElementById('n-' + b).getBoundingClientRect();
+      if (side) {
+        const x1 = A.right - r.left, y1 = A.top - r.top + A.height / 2;
+        const x2 = B.right - r.left + 4, y2 = B.top - r.top + B.height / 2;
+        const cx = Math.max(x1, x2) + 28;
+        out += `<path d="M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}" marker-end="url(#dag-ah)"/>`;
+      } else {
+        const x1 = A.left - r.left + A.width / 2, y1 = A.bottom - r.top;
+        const x2 = B.left - r.left + B.width / 2, y2 = B.top - r.top - 4;
+        const my = (y1 + y2) / 2;
+        out += `<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" marker-end="url(#dag-ah)"/>`;
+      }
+    }
+    g.innerHTML = out;
+  }
+  new ResizeObserver(draw).observe(dag);
+  window.addEventListener('load', draw);
+  draw();
+})();
+</script>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>horizon: drafts in Teams, read and written by agents</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5b6475; --line: #d5dae3; --panel: #f5f7fa;
+    --accent: #2f5fa7; --low: #2f6fb5; --low-bg: #e8f0fa; --mod: #a2600b; --mod-bg: #fbf0df;
+    --ext-bg: #f0f1f4; --code-bg: #eef1f5; --new: #2f7d4f; --new-bg: #e5f3ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171d; --fg: #e3e7ee; --muted: #9aa3b2; --line: #343a46; --panel: #1c2028;
+      --accent: #7fa8e6; --low: #7fb0e8; --low-bg: #1b2a3d; --mod: #e2a654; --mod-bg: #35281a;
+      --ext-bg: #20242c; --code-bg: #232833; --new: #7cc59a; --new-bg: #1c3226;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 24px 80px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.35rem; margin: 48px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 24px 0 8px; }
+  p, li { max-width: 72ch; }
+  a { color: var(--accent); }
+  code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 1px 5px; border-radius: 4px; }
+  pre { font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg);
+    padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 0; }
+  .lede { font-size: 1.1rem; color: var(--muted); margin: 0 0 8px; }
+  .stamp { font-size: 0.85rem; color: var(--muted); }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 18px; margin: 24px 0; columns: 2; column-gap: 32px; font-size: 0.95rem; }
+  nav.toc a { display: block; padding: 2px 0; text-decoration: none; }
+  figure { margin: 24px 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 8px; max-width: 80ch; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; background: var(--panel); }
+  td:first-child { white-space: nowrap; }
+  .tag { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 1px 8px;
+    border-radius: 10px; vertical-align: 1px; }
+  .tag.new { color: var(--new); background: var(--new-bg); }
+  .tag.ext { color: var(--low); background: var(--low-bg); }
+  .tag.mod { color: var(--mod); background: var(--mod-bg); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--panel); }
+  .card h3 { margin-top: 0; }
+  .card p { margin: 6px 0 0; font-size: 0.95rem; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0; }
+  .pair .card h3 { font-size: 0.95rem; }
+  @media (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+  ol.flow li { margin: 6px 0; }
+  dl.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; }
+  dl.glossary dt { font-weight: 600; }
+  dl.glossary dd { margin: 0; max-width: 70ch; }
+  /* the diagram */
+  .d-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+  .d-ext { fill: var(--ext-bg); stroke: var(--line); stroke-width: 1.5; }
+  .d-later { fill: var(--ext-bg); stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .d-mod { fill: var(--mod-bg); stroke: var(--mod); stroke-width: 1.2; }
+  .d-new { fill: var(--new-bg); stroke: var(--new); stroke-width: 1.2; }
+  .d-chip { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .d-title { fill: var(--fg); font: 600 15px system-ui, sans-serif; }
+  .d-sub { fill: var(--muted); font: 12px system-ui, sans-serif; }
+  .d-text { fill: var(--fg); font: 12.5px system-ui, sans-serif; }
+  .d-new-t { fill: var(--new); font: 600 12px system-ui, sans-serif; }
+  .d-mod-t { fill: var(--mod); font: 600 12px system-ui, sans-serif; }
+  .d-group { fill: var(--muted); font: 600 11px system-ui, sans-serif; letter-spacing: 0.08em; }
+  .d-arrow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .d-arrow-dash { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+  .d-head { fill: var(--muted); }
+  .d-label { fill: var(--muted); font: italic 11.5px system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Drafts in Teams, read and written by agents</h1>
+<p class="lede">A proposal's checklist carried into its drafts, so that agents (the platform's and
+a person's own) can find, read and, in Markdown, write each checklist item's section.</p>
+<p class="stamp">Built 2026-10-26 on two branches, merged the same day: <code>lane/drafts-read</code>
+(sections 4–5's reading) and <code>lane/drafts-write</code> (Markdown and writing, off unless
+<code>AGENT_DRAFT_WRITES=1</code>); both ruled by the owner on 2026-10-27, writes on in production
+and judged in use (decision 0006's two addenda of 2026-10-26).
+Designed on branch <code>proto/markdown-drafts</code> (its prototype, never merged)
+(prototype and findings: <a href="https://gitlab.uvm.edu/codec/horizon/-/blob/main/findings/2026-10-25-markdown-drafts/README.md">findings/2026-10-25-markdown-drafts</a>),
+reviewed by two advisor sessions (structure, then the change radius and its pruning). The rulings it needed are listed in <a href="#rulings">section 8</a>.</p>
+
+<nav class="toc" aria-label="Contents">
+  <a href="#goals">1. What it is for</a>
+  <a href="#picture">2. The picture</a>
+  <a href="#formats">3. Word or Markdown</a>
+  <a href="#file">4. How the checklist lives in a draft</a>
+  <a href="#tools">5. The tools</a>
+  <a href="#write">6. How a write lands</a>
+  <a href="#reach">7. Who reaches it, and how</a>
+  <a href="#rulings">8. Rulings and guards</a>
+  <a href="#delivery">9. How it is delivered</a>
+  <a href="#prune">10. Built to be pruned</a>
+  <a href="#open">11. Open questions</a>
+  <a href="#glossary">12. Words</a>
+</nav>
+
+<h2 id="goals">1. What it is for</h2>
+<p>Today a team's drafts sit in its Teams workspace as Word files, a folder per deliverable made
+from its row the first time it is needed (decision 0006, addendum 2026-10-26 on deliverables, 5), or
+one application file for the call's text fields. The platform can create an empty outline there and read a draft whole, but an
+agent cannot go to one checklist item's part of a draft, and nothing can write into one.</p>
+<div class="cards">
+  <div class="card"><h3>One feature, two ways in</h3><p>The same tools serve the platform's own
+    agent and a person's own agent on their subscription (Claude Code, Claude Desktop, any MCP
+    client).</p></div>
+  <div class="card"><h3>The checklist lives in the draft</h3><p>Document, part, sub-part: each
+    heading carries the id of the checklist item it answers, with what the call requires under
+    it.</p></div>
+  <div class="card"><h3>Navigate, never read whole</h3><p>Outline, then a section by item, then
+    a position inside it. A 20-page narrative (about 60,000 characters) never has to fit in one
+    reply.</p></div>
+  <div class="card"><h3>Write in place</h3><p>Fill or extend an item's section without
+    overwriting a co-author. Markdown only.</p></div>
+  <div class="card"><h3>Stay in step</h3><p>Items missing from the draft are inserted; a lost
+    marker can be put back; the draft's own changes are reported.</p></div>
+  <div class="card"><h3>Formats behind one interface</h3><p>Word and Markdown now; LaTeX
+    (Overleaf) later, without touching the tools.</p></div>
+</div>
+<p>People keep writing in Teams. Agents only ever write into a file the platform made; creating
+files stays on the platform's buttons.</p>
+
+<h2 id="picture">2. The picture</h2>
+<figure>
+<svg viewBox="0 0 1060 540" role="img" aria-labelledby="diag-title diag-desc">
+  <title id="diag-title">Drafts in Teams: who calls what</title>
+  <desc id="diag-desc">A person in the browser uses the app's pages; their own AI assistant uses the
+    app's MCP connector; later the platform's own agent calls the same tool functions. Pages and
+    connector both call plain functions in the proposals domain, which read and write drafts through
+    one format interface (Word read-only, Markdown read and write), through Microsoft Graph as the
+    person, into the proposal's Teams workspace. The choice of format and a record of each agent
+    write are kept in PostgreSQL.</desc>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="d-head"/>
+    </marker>
+  </defs>
+
+  <text x="20" y="30" class="d-group">WHO</text>
+  <text x="265" y="30" class="d-group">THE APP (ONE PROCESS)</text>
+  <text x="630" y="30" class="d-group">MICROSOFT GRAPH</text>
+  <text x="845" y="30" class="d-group">WHERE DRAFTS LIVE</text>
+
+  <!-- who -->
+  <rect x="20" y="60" width="210" height="80" rx="8" class="d-ext"/>
+  <text x="32" y="84" class="d-title">A person, in the browser</text>
+  <text x="32" y="104" class="d-text">task page, workspace set-up</text>
+  <text x="32" y="122" class="d-sub">session cookie</text>
+
+  <rect x="20" y="160" width="210" height="96" rx="8" class="d-ext"/>
+  <text x="32" y="184" class="d-title">Their own AI assistant</text>
+  <text x="32" y="204" class="d-text">Claude Code, Claude Desktop,</text>
+  <text x="32" y="221" class="d-text">any MCP client</text>
+  <text x="32" y="240" class="d-sub">hzp_ token from Settings</text>
+
+  <rect x="20" y="276" width="210" height="96" rx="8" class="d-later"/>
+  <text x="32" y="300" class="d-title">The platform's agent</text>
+  <text x="32" y="320" class="d-text">our model, in-process, as the</text>
+  <text x="32" y="337" class="d-text">person who pressed</text>
+  <text x="32" y="356" class="d-sub">later; a new model surface</text>
+
+  <!-- the app -->
+  <rect x="265" y="45" width="330" height="470" rx="10" class="d-box"/>
+  <text x="279" y="70" class="d-title">frontend/</text>
+  <text x="279" y="88" class="d-sub">pages and connector share functions, not a protocol</text>
+
+  <rect x="283" y="98" width="294" height="38" rx="6" class="d-chip"/>
+  <text x="295" y="122" class="d-text"><tspan font-weight="600">lib/data/*.remote.ts</tspan>  the pages</text>
+  <rect x="283" y="146" width="294" height="38" rx="6" class="d-chip"/>
+  <text x="295" y="170" class="d-text"><tspan font-weight="600">/mcp</tspan>  the connector (parties only)</text>
+  <rect x="283" y="194" width="294" height="38" rx="6" class="d-chip"/>
+  <text x="295" y="218" class="d-text"><tspan font-weight="600">agent.ts</tspan>  AGENT_TOOLS: names, schemas</text>
+
+  <rect x="283" y="252" width="294" height="58" rx="6" class="d-chip"/>
+  <text x="295" y="274" class="d-text"><tspan font-weight="600">proposals/</tspan>  team-docs · drafts</text>
+  <text x="295" y="295" class="d-text">and the tool functions (Db, Actor, input)</text>
+
+  <rect x="283" y="330" width="294" height="122" rx="8" class="d-new"/>
+  <text x="295" y="352" class="d-new-t">NEW  proposals/draft-files/</text>
+  <text x="295" y="371" class="d-text">format.ts: one interface per format</text>
+  <rect x="295" y="384" width="130" height="54" rx="6" class="d-chip"/>
+  <text x="305" y="406" class="d-text"><tspan font-weight="600">word.ts</tspan></text>
+  <text x="305" y="425" class="d-sub">read only</text>
+  <rect x="435" y="384" width="130" height="54" rx="6" class="d-chip"/>
+  <text x="445" y="406" class="d-text"><tspan font-weight="600">markdown.ts</tspan></text>
+  <text x="445" y="425" class="d-sub">read + write</text>
+  <text x="279" y="476" class="d-sub">format: the file's extension</text>
+  <text x="279" y="494" class="d-sub">may write: .md AND the workspace chose Markdown</text>
+
+  <!-- graph -->
+  <rect x="630" y="45" width="180" height="300" rx="10" class="d-box"/>
+  <text x="644" y="70" class="d-title">graph/</text>
+  <text x="644" y="88" class="d-sub">always as the person</text>
+  <rect x="644" y="100" width="152" height="50" rx="6" class="d-chip"/>
+  <text x="654" y="121" class="d-text"><tspan font-weight="600">docx.ts</tspan></text>
+  <text x="654" y="139" class="d-sub">writes the Word outline</text>
+  <rect x="644" y="158" width="152" height="50" rx="6" class="d-chip"/>
+  <text x="654" y="179" class="d-text"><tspan font-weight="600">docx-read.ts</tspan></text>
+  <text x="654" y="197" class="d-sub">+ ids with text</text>
+  <rect x="644" y="216" width="152" height="50" rx="6" class="d-chip"/>
+  <text x="654" y="237" class="d-text"><tspan font-weight="600">drive.ts</tspan></text>
+  <text x="654" y="255" class="d-sub">reads (GET only)</text>
+  <rect x="644" y="274" width="152" height="58" rx="6" class="d-chip"/>
+  <text x="654" y="295" class="d-text"><tspan font-weight="600">teams.ts</tspan>  new files;</text>
+  <text x="654" y="313" class="d-sub">+ PUT a .md, If-Match</text>
+
+  <!-- teams -->
+  <rect x="845" y="45" width="195" height="215" rx="10" class="d-ext"/>
+  <text x="859" y="70" class="d-title">Microsoft Teams</text>
+  <text x="859" y="88" class="d-sub">the proposal's workspace</text>
+  <text x="859" y="114" class="d-text">1 - Project Description/</text>
+  <text x="871" y="136" class="d-text">Project Description.docx</text>
+  <text x="883" y="153" class="d-sub">agents read and check</text>
+  <text x="871" y="177" class="d-text">Project Description.md</text>
+  <text x="883" y="194" class="d-sub">agents also write</text>
+  <text x="859" y="222" class="d-sub">each heading carries its</text>
+  <text x="859" y="239" class="d-sub">checklist item's id</text>
+
+  <!-- postgres -->
+  <rect x="630" y="380" width="410" height="112" rx="10" class="d-mod"/>
+  <text x="644" y="402" class="d-mod-t">POSTGRESQL · app (MODERATE)</text>
+  <text x="644" y="424" class="d-text"><tspan font-weight="600">workspace_provisions.draft_format</tspan>  'docx' | 'markdown'  <tspan class="d-new-t">NEW</tspan></text>
+  <text x="644" y="446" class="d-text"><tspan font-weight="600">proposal_events</tspan>  one row per agent write, never text  <tspan class="d-new-t">NEW</tspan></text>
+  <text x="644" y="468" class="d-text"><tspan font-weight="600">proposal_tasks</tspan>  the checklist items and their ids</text>
+
+  <!-- arrows: who -> app -->
+  <path d="M230 104 L281 117" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M230 205 L281 166" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M230 322 L281 285" class="d-arrow-dash" marker-end="url(#ah)"/>
+  <!-- inside the app -->
+  <path d="M430 184 L430 192" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M430 232 L430 250" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M577 117 C 590 117, 590 280, 579 280" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M430 310 L430 328" class="d-arrow" marker-end="url(#ah)"/>
+  <!-- app -> graph, app -> postgres -->
+  <path d="M595 380 L628 300" class="d-arrow" marker-end="url(#ah)"/>
+  <path d="M595 290 C 612 300, 612 420, 628 424" class="d-arrow" marker-end="url(#ah)"/>
+  <!-- graph <-> teams -->
+  <path d="M810 150 L843 150" class="d-arrow" marker-end="url(#ah)" marker-start="url(#ah)"/>
+</svg>
+<figcaption>The pages and the connector are two doors onto the same functions; the connector
+admits the proposal's parties only, the pages go by the app's own access table. Every Microsoft
+call is made as the person, through the connection they made in Settings; there is no service
+account. The platform's agent (dashed) comes later and calls the same functions in-process.</figcaption>
+</figure>
+
+<h2 id="formats">3. Word or Markdown</h2>
+<p>A team chooses when it sets up the workspace. The format of a file is its extension; the
+workspace's choice is the team's consent to agent writes. A file is writable only when it is a
+<code>.md</code>, the workspace chose Markdown, and the file is one the platform made for the task
+and listed in the task's own folder, or, for a task with none, among the attempt folder's own
+top-level files, where the platform put it. There a read too sees only the task's own files (a
+<code>provisioned</code> link of the task, or named after it), never another task's outline or a
+person's upload beside it; and only a <code>written</code> deliverable (or a part of one) has a draft
+(decision 0006, addendum 2026-10-26 on deliverables, 2).</p>
+<h3 id="layout">One application file, or a file per deliverable</h3>
+<p>Decision 0006's addendum 2026-10-26 on deliverables, 4. The default comes from the call: a
+deliverable submitted as a text field (Northeast SARE's sections) goes into one application file; an
+upload gets a file of its own; a form or a collected deliverable gets no draft. The team may override
+at set-up, beside the Word/Markdown choice: <em>one application file</em> or <em>a file per
+deliverable</em>, one choice per workspace. The application file is Word only: it is open all day,
+Word co-authors, and the hand test showed the Markdown web editor's autosave erasing an upload. The
+platform writes it once, at creation (Heading 1 per deliverable with its limit, parts beneath, a
+marker on every heading, the sponsor's instructions in the body, the review criteria as comments),
+and never again; agents read and check it. Every read is per deliverable: the deliverable's marked
+slice of the file and nothing else, so the draft check still never sends one deliverable's text with
+another's. A heading that lost its marker and matches an item's title at its level is read as that
+item, and said so. A page limit inside the shared file has no page count, as in Markdown. Agent
+writes stay with Markdown, a file per deliverable.</p>
+<p>As built (B4b). The choice is offered wherever a workspace is set up, beside the Word/Markdown
+choice. The call's default is marked; keeping it stores no choice (null), so the call decides as its checklist is
+drafted. The file is made by the <em>first</em> "Create outline" or "Create document" on any
+deliverable that belongs in it, or on one of its parts, at the top of the attempt folder, named
+<code>&lt;proposal title&gt; - Application.docx</code>, with every deliverable that belongs in it at
+that moment, in the checklist's order; it is linked from each of them and from every part and
+sub-part, and later presses open it through that link. A deliverable that already holds a file of
+its own is never put in it. A deliverable added to the checklist after it was made gets a file of its
+own, in its own folder, even in this layout. A deliverable in the file
+gets no folder; "Open in Teams" on its row opens the file. The comments carry the format rules the
+checklist applies to the deliverable (<code>applies_to</code>); no other guidance is linked to a
+deliverable unless the data links it.</p>
+<div class="pair">
+  <div class="card"><h3>Word (.docx), the default</h3><p>Agents read and check: outline, a
+    section by item, a position inside it. People get everything Word gives: desktop and web,
+    mature co-authoring, tracked changes, comments, reference managers, sponsors' templates, real
+    page counts and the PDF the sponsor wants.</p></div>
+  <div class="card"><h3>Markdown (.md)</h3><p>Agents also write: fill a section, add to it,
+    insert a missing one, put back a lost marker. People write in Microsoft's Markdown editor (web
+    only, new in 2026). No page count, so the draft check cannot judge a page limit, and the
+    sponsor's PDF is one render with a template from the sponsor's format rules.</p></div>
+</div>
+<table>
+  <thead><tr><th>Goal</th><th>Word</th><th>Markdown</th></tr></thead>
+  <tbody>
+    <tr><td>Read by section</td><td>Yes, through our XML reader, where the hidden bookmarks survived</td><td>Yes; the marker is visible and repairable</td></tr>
+    <tr><td>Write in place</td><td>No: the agent's text is not the file's (runs, styles, tracked changes)</td><td>Yes: a splice in a text file</td></tr>
+    <tr><td>Insert a missing item</td><td>No (reported only)</td><td>Yes</td></tr>
+    <tr><td>Writers' experience</td><td>Strongest</td><td>Weakest; editor maturity unknown</td></tr>
+    <tr><td>The sponsor's PDF</td><td>Native</td><td>One step: pandoc and a template from the sponsor's format rules</td></tr>
+  </tbody>
+</table>
+<h3>From Markdown to the sponsor's PDF</h3>
+<p>The owner's direction (2026-10-26): a Markdown draft goes to the sponsor's PDF in one step, with
+pandoc and a template that applies the sponsor's formatting rules: font and size, margins, line
+spacing, page limit. The checklist already holds those rules as format items attached to their
+document (<code>applies_to</code>), so the template's settings can come from the checklist rather
+than from a person retyping them. The same render gives a real page count, so the draft check can
+judge a page limit on a <code>.md</code> again whenever it renders. Not designed yet: the PDF engine
+(Typst, light, or LaTeX, heavy), how a format item's words become a template setting, and where the
+render runs (pandoc is not on the box today).</p>
+<p>The set-up box says it in one line each: <em>Word: your assistant can read and check the
+draft. Markdown: your assistant can also write into it; no page count while you write.</em></p>
+
+<h2 id="file">4. How the checklist lives in a draft</h2>
+<p>Each heading the platform writes carries its checklist item's id as a marker:
+<code>c</code> + the item's 32 hex digits. One grammar, defined once in
+<code>graph/docx.ts</code> and imported by every format. The depth-to-heading mapping is one
+shared constant too: the task's title, then its parts, then sub-parts.</p>
+<div class="pair">
+  <div class="card"><h3>Markdown</h3>
+<pre># Project Description
+
+**Limit: 20 pages maximum**
+
+## I. Research and Capacity-Building Goals {#c9d91d545d8694…}
+
+### B. Evaluation and Assessment Plan {#c70e1c460454d49…}
+
+&gt; *From the call:* Annual evaluation by an independent
+&gt; evaluator, EDOCS outcome collection, …
+
+(the team writes here)</pre></div>
+  <div class="card"><h3>Word</h3>
+<pre>&lt;w:bookmarkStart w:name="_c70e1c460454d49…"/&gt;
+&lt;w:p&gt;
+  &lt;w:pPr&gt;&lt;w:pStyle w:val="Heading2"/&gt;&lt;/w:pPr&gt;
+  &lt;w:r&gt;&lt;w:t&gt;B. Evaluation and Assessment Plan&lt;/w:t&gt;&lt;/w:r&gt;
+&lt;/w:p&gt;
+&lt;w:p&gt;… grey italic: the call's words …&lt;/w:p&gt;</pre>
+  <p>A hidden bookmark on each heading; the level is the heading style.</p></div>
+</div>
+<p>A section runs to the next marked heading or the next heading at its level or above, so a
+writer's own sub-headings stay inside it. Markdown reads two marker spellings, the attribute
+<code>{#c…}</code> and the comment <code>&lt;!-- c… --&gt;</code>, until the hand test in
+Microsoft's editor says which survives. The attribute has one more property: pandoc carries it into
+a <code>.docx</code> as a bookmark today's Word reader understands, so a Markdown draft can be
+turned into a Word file that still maps to the checklist (prototype finding 1).</p>
+
+<h2 id="tools">5. The tools</h2>
+<p>Plain functions in <code>lib/server/proposals/agent.ts</code>, listed in
+<code>AGENT_TOOLS</code>, served by the app's connector and callable in-process by the platform's
+agent. They follow the pattern agents already use on UVM's requirements: outline, then a section
+by id, then more of it.</p>
+<table>
+  <thead><tr><th>Tool</th><th></th><th>Word</th><th>Markdown</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>checklist_read</code></td><td><span class="tag ext">extended</span></td><td>✓</td><td>✓</td><td>Adds each section's item id and marker, and each document's draft files with <code>format</code> and <code>editable</code>. Today section ids are dropped.</td></tr>
+    <tr><td><code>draft_outline</code></td><td><span class="tag new">new</span></td><td>✓</td><td>✓</td><td>Per file: headings with item id, level, size. Items missing from the file, markers not on the checklist, unmarked headings, duplicates. Starts from the platform's links to the files, the listing of the task's folder (or, for a task with none, of the attempt folder's own top-level files, only the task's own: its <code>provisioned</code> links or named after it) confirms. A document task only.</td></tr>
+    <tr><td><code>read_draft</code></td><td><span class="tag ext">extended</span></td><td>✓</td><td>✓</td><td>Adds <code>section</code> (an item id) and <code>offset</code>; returns the section's <code>version</code>. Offset also works on files with no markers (uploaded PDFs, old Word). A section read costs 1, not 3.</td></tr>
+    <tr><td><code>update_section</code></td><td><span class="tag new">new</span></td><td>refused</td><td>✓</td><td>Replace or append to an item's section, by item id, given the <code>version</code> it read. The main write.</td></tr>
+    <tr><td><code>add_section</code></td><td><span class="tag new">new</span></td><td>refused</td><td>✓</td><td>Insert a missing item's heading, marker and guidance in its place; or adopt: re-mark an unmarked heading whose title matches a missing item.</td></tr>
+    <tr><td><code>edit_draft</code></td><td><span class="tag new">new</span></td><td>refused</td><td>✓</td><td>Exact-string replace, scoped to one section: small corrections.</td></tr>
+  </tbody>
+</table>
+<p>Cut: a draft grep. Outline, section and offset cover navigation; a search can come later on
+the same download if a need is measured.</p>
+
+<h2 id="write">6. How a write lands</h2>
+<ol class="flow">
+  <li>The agent reads the section with <code>read_draft</code> and receives its
+    <code>version</code>: 8 characters, a hash of the section's text. No draft text is stored;
+    the hash is recomputed from the file on every call.</li>
+  <li>It calls <code>update_section</code> with the item id, the version and its text.</li>
+  <li>The server refuses text that carries a marker, a heading at the section's level or above, or
+    more than the size cap.</li>
+  <li>It downloads the file now, finds the item's section, and compares its hash with the version.
+    Changed: refused, "someone changed this section since you read it". Unchanged: the text is
+    spliced in; nothing outside the section moves.</li>
+  <li>It opens an upload session on the file with <code>If-Match</code> on the eTag it downloaded
+    (Microsoft documents the 412 on that call, not on a plain content PUT), then puts the whole file
+    to the session's pre-authenticated address, checked to be on <code>sharepoint.com</code> and
+    never sent the token. If anyone saved in between (Microsoft's editor saves as people type), the
+    server waits 200–500 ms, re-downloads and repeats from 4, three attempts in all. Only a change to
+    this same section refuses. Left open: a save between the session's opening and the upload, which
+    Microsoft documents neither way.</li>
+  <li>One <code>proposal_events</code> row, type <code>draft_written</code>: who, which task, file
+    and item, the tool, size before and after. Never the text. History shows it, the other parties'
+    Updates feed carries it, and SharePoint's own version history shows the person as the author. If
+    the row cannot be written, it is tried once more, then the answer and the operator's log say so.</li>
+  <li>A write can still be lost afterwards: Microsoft's web editor saves what a person typed a short while
+    later (the editor's autosave delay), so if someone had the file open with unsaved typing, their next
+    autosave replaces the upload (it stays in SharePoint's version history; <code>If-Match</code> cannot see
+    edits still in the browser). The agent's instructions therefore have it read the section again after a
+    write, and write once more only if the section reads exactly as before its first write; if it holds the
+    person's new words it stops and tells them, showing what it meant to put in. For an append it first
+    checks its text is not already there. This check is the agent's best effort: a client cannot reliably
+    wait, and an agent that re-reads at once sees its own write. A later step could have the server re-read
+    recently written files on the token's next request and report a lost write (not built).</li>
+</ol>
+
+<h2 id="reach">7. Who reaches it, and how</h2>
+<table>
+  <thead><tr><th>Who</th><th>How</th><th>As whom</th></tr></thead>
+  <tbody>
+    <tr><td>A person, in the browser</td><td>The task page: the outline button, the progress panel, <em>Add section</em> for an item missing from a Markdown file and <em>Re-mark</em> for a heading at the item's level whose marker was lost</td><td>Themselves; the app's access table (<code>collaborate</code>, <code>view</code>)</td></tr>
+    <tr><td>Their own AI assistant</td><td>The app's connector at <code>/mcp</code> with an <code>hzp_</code> token minted in Settings; the steps are on the docs site's Connect over MCP page</td><td>Themselves, the proposal's parties only (<code>use_via_agent</code>), through their own Microsoft connection</td></tr>
+    <tr><td>The platform's agent (later)</td><td>A button; the loop calls the tool functions in-process with their definitions from <code>AGENT_TOOLS</code></td><td>The person who pressed. Never a background run</td></tr>
+  </tbody>
+</table>
+<p>The app never calls its own connector: the connector's guard is deliberately narrower than
+the pages', it takes a token instead of a session, and both run in the same process anyway.</p>
+
+<h2 id="rulings">8. Rulings and guards</h2>
+<table>
+  <thead><tr><th>What</th><th>Why it needs a ruling</th></tr></thead>
+  <tbody>
+    <tr><td>Decision 0006, addendum 2026-10-08</td><td>The connector's contract: "a new tool, or a new field, amends this addendum before the code". Reading needs a small amendment (<code>draft_outline</code>, section ids); writing a larger one.</td></tr>
+    <tr><td>Injection</td><td>Today planted text in a sponsor quote or a teammate's note can only steer a read. With writes it can steer a person's agent into writing in the team's draft, including instructions for the next agent that reads it. The addendum states this risk; the guards in section 6 limit what one write can do.</td></tr>
+    <tr><td>"It only reads"</td><td>The Settings card's sentence and the connector's instructions change where writes are on.</td></tr>
+    <tr><td><code>teams.ts</code></td><td>Only creates new files today, on purpose. The one new write is a PUT on an existing <code>.md</code>, refused without If-Match.</td></tr>
+    <tr><td>Read-only transactions</td><td>Every connector tool runs in one; the two writes are exempted by name, with a test.</td></tr>
+    <tr><td>The platform's agent</td><td>A new model surface: decision 0006's allow-list is amended before its code.</td></tr>
+    <tr><td>Decision 0020</td><td>Not tripped: "no agent starts a draft" is about the checklist drafter, not documents.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="delivery">9. How it is delivered</h2>
+<p>As any developer's work: branches, tests against the fake drive and fake Teams (no test ever
+creates a real team), merge requests; the owner merges and deploys <code>main</code> to staging,
+then production. Code that writes to Teams meets a real team only on staging.</p>
+<div class="pair">
+  <div class="card"><h3>A. Reading <span class="tag new">first</span></h3><p>The 0006 amendment
+    (docs only), then: <code>docx-read.ts</code> returns ids with text,
+    <code>draft-files/</code> (Word), section ids in <code>checklist_read</code> (its file
+    list from the platform's links, so it stays free of Graph calls),
+    <code>draft_outline</code>, <code>read_draft</code> by section and offset (a per-tool cost
+    that can depend on whether a section was asked, never logging an argument). No migration.
+    Word teams benefit at once.</p></div>
+  <div class="card"><h3>B. Markdown and writing</h3><p>The 0006 addendum for writes (docs only),
+    then: <code>draft_format</code>, Markdown outlines, the <code>teams.ts</code> PUT,
+    <code>update_section</code>, <code>add_section</code>, the event row, the draft check reading
+    <code>.md</code> (no page count). Off unless one setting turns it on, and that setting hides
+    the whole Markdown surface: the set-up option, the write tools, the task page's buttons. Set in
+    staging's environment only, so nothing in production changes until it is switched on there.
+    It opens once the hand test (section 11) is in.</p></div>
+</div>
+
+<h2 id="prune">10. Built to be pruned</h2>
+<p>Shaped so that dropping any part later is deleting files, not a refactor:</p>
+<ul>
+  <li>The write tools in one file, <code>proposals/agent-writes.ts</code>, added to
+    <code>AGENT_TOOLS</code> in one line.</li>
+  <li>One property on a tool, not lists of names: <code>flag</code> decides where it is served
+    (generalising today's reviewers'-text switch), <code>writes</code> exempts it from the
+    read-only transaction and records its event. A test: every writing tool carries the writes
+    flag.</li>
+  <li>The formats in one registry constant, <code>DRAFT_FORMATS</code>; the set-up box renders
+    its options from it and the server validates against it.</li>
+  <li>One setting for the whole Markdown surface, read in one predicate (beside the other
+    environment rules in <code>env.ts</code>).</li>
+  <li>The column as plain nullable text: no Postgres enum, no default, null reads as Word.</li>
+  <li>One event type, <code>draft_written</code>, the tool, file, item and sizes in its details.</li>
+  <li>The connector's tool-list snapshot keyed by named configurations (<code>default</code>,
+    <code>reviewers</code>, <code>writes</code>); the docs site renders <code>default</code>, so it
+    never advertises a tool production does not serve.</li>
+</ul>
+<table>
+  <thead><tr><th>Dropping</th><th>What goes</th><th>Cost</th></tr></thead>
+  <tbody>
+    <tr><td>The write tools</td><td><code>agent-writes.ts</code> and its line, the setting, the <code>teams.ts</code> write and its test row, the write half of the format interface; the addendum, the Settings copy and the instructions amended</td><td>An afternoon, deletions</td></tr>
+    <tr><td>Markdown</td><td>The above, <code>markdown.ts</code>, its registry entry (the set-up option goes with it), one migration dropping the column</td><td>A day; the two migration files stay forever</td></tr>
+    <tr><td>Everything</td><td>The above, <code>draft_outline</code>, <code>read_draft</code>'s new parameters, <code>word.ts</code>, the section ids</td><td>Not advised: the reading half is a better reader for Word whatever happens</td></tr>
+  </tbody>
+</table>
+<p>What cannot be undone, in order: event rows in production once the setting is on there (an
+event type and its label live forever, decision 0002; while the setting is staging-only none
+exist, which is the strongest reason for it); the migration files; the addendum's text, amended
+rather than deleted; and teams' own <code>.md</code> drafts. Those have an exit: pandoc turns a
+Markdown draft with <code>{#c…}</code> markers into a Word file today's reader maps to the
+checklist, the reason the attribute spelling was worth its looks.</p>
+
+<h2 id="open">11. Open questions</h2>
+<p><strong>Heavy checklists (queued 2026-10-27, after the gold labels, the overlap scorer and the parts fix).</strong>
+A complex call's key is long (RFAP: 28 deliverables, 130 rules, 67 form fields) mostly because of three kinds of row,
+each with its own home rather than a separate mode for complex grants: <em>conditional items</em> (a resubmission's
+response, a lobbying disclosure, collaborator letters) asked about and hidden when they do not apply, the biggest lever,
+since the key already records a <code>condition</code> per row and the drafter does not yet; <em>rules</em> folded
+under the deliverable they govern, the rest in one group for the whole application; <em>form fields</em> folded under
+their form, mostly SPA's. A complexity count (deliverables, conditional items, guide-sourced items) may serve as a
+signal, never as a switch. Nothing is built; it is the next design question once completeness is measured.</p>
+<p><strong>Review notes in a Markdown draft (being tried, the owner, 2026-10-28).</strong>
+A person's assistant leaves its review of a section in the draft itself, beside the passage it concerns: a
+blockquote spelled <code>&gt; [!note] horizon: …</code> (GitHub's alert syntax, a callout where the editor
+renders one), put in with <code>edit_draft</code> (the passage replaced by itself and the note after it) or
+appended with <code>update_section</code>. No code: the guards allow it (a blockquote is neither a marker nor a
+heading), and the write is recorded as any other. Only on the person's request, through their own assistant;
+the platform writing notes on its own is the platform agent's own addendum (0006, the write addendum, 6).
+Two costs while it is tried: a note is draft text, so <code>draft_outline</code>'s counts include it, and a note
+nobody deleted goes to the sponsor (pandoc keeps a blockquote visible in Word). If notes prove useful, the
+readers learn the spelling with no model: left out of word counts and limits, listed per section in
+<code>draft_outline</code>, and any still in the file flagged by the draft check.
+Microsoft's own inline comments for Markdown (roadmap 566202, general availability expected August 2026) are
+the other way: no Graph or SharePoint REST endpoint reads or writes a file's inline comments that we found
+(Microsoft's answer of 2025-08-18: none, none scheduled), so they reach the platform only if the editor
+stores them in the .md itself; the hand test below says which.
+The owner's view after the trial (2026-10-28): workable now, with the losses managed rather than prevented;
+two ways queued, neither built: reviews run while nobody is editing (overnight, on a schedule), and a write
+watched for about 30 seconds and made again if an autosave erased it (section 6, 7's "later step", done
+by the server). A scheduled review by the platform is the platform agent's addendum; one by a person's own
+assistant is not.</p>
+<p>On staging, against real Graph (the fakes cannot answer these): is the upload address always on
+<code>sharepoint.com</code>; does a save between the session's opening and the upload get caught;
+does the upload's answer carry the new eTag; is the replace flag in the session's body needed.</p>
+<p>The owner's hand test in a real team, with <code>out/handtest.md</code> from the lab:</p>
+<ul>
+  <li>Does the Markdown editor open from the Teams Files tab, or only in SharePoint and OneDrive?</li>
+  <li>Which marker spelling survives rewording and moving a heading in the editor? Is
+    <code>{#c…}</code> shown as text?</li>
+  <li>Do co-authoring and comments work; is there a suggestion or tracked-changes mode? (Co-authoring
+    works, 2026-10-26.) Add an inline comment, download the .md: is the comment in the file?</li>
+  <li>While someone has the file open: does a new version uploaded over it merge, fork a copy, or
+    get refused? How often does the eTag change while someone types? <em>Answered by the owner's
+    trial of review notes, 2026-10-28 (Claude Desktop over the connector, a file per deliverable):
+    the notes land and are recorded; an editor open on the file does not take in the agent's write
+    until the page is refreshed (a co-author's typing shows live); a write landing while someone
+    types is erased by their next autosave. Not observed directly: whether an idle editor's next
+    keystroke, much later, saves over it too (likely, as it never took the write in).</em></li>
+  <li>Does the editor save Windows line endings? (The write path normalises them either way.)</li>
+</ul>
+<p>And for the PDF step (section 3): which engine, how format items become template settings,
+and where the render runs.</p>
+
+<h2 id="glossary">12. Words</h2>
+<dl class="glossary">
+  <dt>Item</dt><dd>A checklist row: a deliverable the sponsor wants, or a part or sub-part of one.</dd>
+  <dt>Deliverable</dt><dd>Anything in the application package: a file or text field the team writes (<code>written</code>), a file it collects (<code>collected</code>), or a form it fills in the sponsor's system (<code>form</code>). The thing produced, never the sponsor's form; the form and field are its <code>submitted_as</code> (decision 0006, addendum 2026-10-26 on deliverables, 1).</dd>
+  <dt>Marker</dt><dd>The item's id on its heading: <code>c&lt;hex32&gt;</code> in text formats, a hidden bookmark <code>_c&lt;hex32&gt;</code> in Word.</dd>
+  <dt>Section</dt><dd>The text that belongs to an item: from its heading to the next marked heading or the next heading at its level or above.</dd>
+  <dt>Version</dt><dd>A short hash of a section's text, returned by a read and required by a write.</dd>
+  <dt>Connector</dt><dd>The app's own MCP server at <code>/mcp</code>, for a person's own AI assistant (decision 0012).</dd>
+  <dt>Party</dt><dd>Someone with a role on the proposal: owner, team member, routed SPA administrator, the RD who claimed it.</dd>
+  <dt>Hand test</dt><dd>The owner trying the Markdown file in a real Teams workspace; it settles what a local prototype cannot.</dd>
+</dl>
+
+</main>
+</body>
+</html>
